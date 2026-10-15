@@ -1,25 +1,35 @@
 package com.dhama.homefinance.data.local
 
 import androidx.room.Database
-import androidx.room.Entity
-import androidx.room.PrimaryKey
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dhama.homefinance.data.repository.DefaultCategories
+import com.dhama.homefinance.data.model.Category
+import com.dhama.homefinance.data.model.Transaction
 
 /**
- * Placeholder so the database has at least one table until the
- * Category/Transaction entities land (next PR), which will replace it.
+ * Still version 1: nothing has shipped, so the schema is edited in place
+ * (the PR-A placeholder table is gone). Migrations start with the first release.
+ * The exported schema lives in app/schemas/.
  */
-@Entity(tableName = "app_meta")
-data class AppMeta(
-    @PrimaryKey val key: String,
-    val value: String
-)
-
 @Database(
-    entities = [AppMeta::class],
+    entities = [Category::class, Transaction::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
-abstract class AppDatabase : RoomDatabase()
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun categoryDao(): CategoryDao
+    abstract fun transactionDao(): TransactionDao
+}
+
+/**
+ * Seeds the default categories inside the database-creation transaction, so the very
+ * first query on a fresh install already sees them (no empty first-launch list).
+ */
+object SeedDefaultsCallback : RoomDatabase.Callback() {
+    override fun onCreate(db: SupportSQLiteDatabase) {
+        DefaultCategories.insertInto(db)
+    }
+}
