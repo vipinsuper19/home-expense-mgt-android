@@ -1,6 +1,7 @@
 package com.dhama.homefinance.data.local
 
 import androidx.room.TypeConverter
+import com.dhama.homefinance.data.model.OccurrenceStatus
 import com.dhama.homefinance.data.model.TransactionType
 import java.time.Instant
 import java.time.LocalDate
@@ -24,4 +25,10 @@ class Converters {
 
     @TypeConverter
     fun toType(value: String): TransactionType = TransactionType.valueOf(value)
+
+    @TypeConverter
+    fun fromStatus(status: OccurrenceStatus): String = status.name
+
+    @TypeConverter
+    fun toStatus(value: String): OccurrenceStatus = OccurrenceStatus.valueOf(value)
 }
