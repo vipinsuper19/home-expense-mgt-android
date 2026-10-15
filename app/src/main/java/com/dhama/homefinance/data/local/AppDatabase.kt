@@ -25,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun occurrenceDao(): OccurrenceDao
     abstract fun summaryDao(): SummaryDao
+    abstract fun transactionListDao(): TransactionListDao
 }
 
 /**

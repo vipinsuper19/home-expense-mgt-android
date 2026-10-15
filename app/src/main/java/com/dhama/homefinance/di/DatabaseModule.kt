@@ -6,6 +6,7 @@ import com.dhama.homefinance.data.local.AppDatabase
 import com.dhama.homefinance.data.local.CategoryDao
 import com.dhama.homefinance.data.local.OccurrenceDao
 import com.dhama.homefinance.data.local.SummaryDao
+import com.dhama.homefinance.data.local.TransactionListDao
 import com.dhama.homefinance.data.local.SeedDefaultsCallback
 import com.dhama.homefinance.data.local.TransactionDao
 import dagger.Module
@@ -47,6 +48,9 @@ object DatabaseModule {
 
     @Provides
     fun provideSummaryDao(database: AppDatabase): SummaryDao = database.summaryDao()
+
+    @Provides
+    fun provideTransactionListDao(database: AppDatabase): TransactionListDao = database.transactionListDao()
 
     @Provides
     @Singleton

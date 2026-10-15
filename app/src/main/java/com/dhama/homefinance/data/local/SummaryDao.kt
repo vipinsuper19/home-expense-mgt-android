@@ -41,7 +41,7 @@ interface SummaryDao {
         FROM transactions t
         JOIN categories c ON c.id = t.categoryId
         WHERE t.date BETWEEN :from AND :to
-        GROUP BY t.categoryId, t.type
+        GROUP BY t.categoryId, t.type, c.name, c.icon
         ORDER BY t.type, totalPaise DESC, c.name
         """
     )
@@ -50,6 +50,10 @@ interface SummaryDao {
     /**
      * Outstanding = expected minus receipts already linked to the occurrence (partial
      * payments), floored at 0. Completed and skipped occurrences contribute nothing.
+     *
+     * Note: linked receipts are subtracted whatever month they are dated in (e.g. October
+     * rent received on 2 November still reduces October's outstanding), because the
+     * subquery matches on occurrenceId only, not on the transaction date.
      */
     @Query(
         """
