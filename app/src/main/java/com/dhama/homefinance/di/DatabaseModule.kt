@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.dhama.homefinance.data.local.AppDatabase
 import com.dhama.homefinance.data.local.CategoryDao
+import com.dhama.homefinance.data.local.OccurrenceDao
+import com.dhama.homefinance.data.local.SummaryDao
 import com.dhama.homefinance.data.local.SeedDefaultsCallback
 import com.dhama.homefinance.data.local.TransactionDao
 import dagger.Module
@@ -39,6 +41,12 @@ object DatabaseModule {
 
     @Provides
     fun provideTransactionDao(database: AppDatabase): TransactionDao = database.transactionDao()
+
+    @Provides
+    fun provideOccurrenceDao(database: AppDatabase): OccurrenceDao = database.occurrenceDao()
+
+    @Provides
+    fun provideSummaryDao(database: AppDatabase): SummaryDao = database.summaryDao()
 
     @Provides
     @Singleton
