@@ -10,10 +10,9 @@ import java.util.UUID
 /**
  * One expected (not yet actual) income or expense, e.g. this month's shop rent or electricity bill.
  *
- * Minimal model added for the monthly calculations. The RecurringSchedule table and the
- * generator come with the recurring-data milestone; [scheduleId] gets its foreign key then.
- * [type] and [categoryId] are copied from the schedule when generated, so a later schedule
- * edit doesn't rewrite history and expected totals need no join.
+ * Generated from a [RecurringSchedule] by RecurringRepository.materialize. [type],
+ * [categoryId] and [expectedAmountPaise] are snapshots taken when generated, so a later
+ * schedule edit doesn't rewrite history and expected totals need no join.
  *
  * Expected amounts never count as actual. Money only becomes actual through [Transaction]
  * rows (linked back here via Transaction.occurrenceId, possibly several for partial receipts).
@@ -25,6 +24,13 @@ import java.util.UUID
             entity = Category::class,
             parentColumns = ["id"],
             childColumns = ["categoryId"],
+            onDelete = ForeignKey.RESTRICT
+        ),
+        // Schedules are stopped, not deleted; RESTRICT keeps occurrence history intact.
+        ForeignKey(
+            entity = RecurringSchedule::class,
+            parentColumns = ["id"],
+            childColumns = ["scheduleId"],
             onDelete = ForeignKey.RESTRICT
         )
     ],
