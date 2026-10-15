@@ -39,8 +39,12 @@ class RecurringRepositoryTest {
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), AppDatabase::class.java)
             .addCallback(SeedDefaultsCallback).allowMainThreadQueries().build()
-        repo = RecurringRepository(db, Clock.fixed(Instant.parse("2026-10-15T00:00:00Z"), ZoneOffset.UTC))
+        repo = repoAt("2026-01-01")
     }
+
+    /** Repository whose "today" is [date] (UTC). */
+    private fun repoAt(date: String) =
+        RecurringRepository(db, Clock.fixed(Instant.parse("${date}T00:00:00Z"), ZoneOffset.UTC))
 
     @After fun tearDown() = db.close()
 
@@ -191,5 +195,82 @@ class RecurringRepositoryTest {
         assertEquals(31 * 6_000L, expected.expensePaise)      // 31 milk days
         // Actual totals are untouched by expected rows.
         assertEquals(0, db.summaryDao().observeActualTotals(d("2026-10-01"), d("2026-10-31")).first().transactionCount)
+    }
+
+    // --- Tech Lead review of #9 ---
+
+    @Test fun earlierChangeAddedLaterDoesNotOverwriteLaterChange() = runTest {
+        repo.create(rent)
+        repo.materialize(d("2026-10-01"), d("2027-02-28"))
+        repo.changeAmount("rent", d("2026-12-01"), 1_700_000)
+        repo.changeAmount("rent", d("2026-11-01"), 1_600_000)
+        assertEquals(
+            mapOf(
+                "2026-10-31" to 1_500_000L, "2026-11-30" to 1_600_000L,
+                "2026-12-31" to 1_700_000L, "2027-01-31" to 1_700_000L, "2027-02-28" to 1_700_000L
+            ),
+            repo.occurrences("rent").associate { it.dueDate.toString() to it.expectedAmountPaise }
+        )
+    }
+
+    @Test fun sameDayChangeReplacesTheEarlierOne() = runTest {
+        repo.create(rent)
+        repo.materialize(d("2026-03-01"), d("2026-03-31"))
+        repo.changeAmount("rent", d("2026-03-01"), 1_600_000)
+        repo.changeAmount("rent", d("2026-03-01"), 1_650_000)
+        assertEquals(1, dao.amountChangesFor(listOf("rent")).size)
+        assertEquals(1_650_000L, repo.occurrences("rent").single().expectedAmountPaise)
+    }
+
+    /** Milk materialized 1–10 Oct, today = 6 Oct: 1–5 Oct are overdue PENDING; 3 Oct is linked. */
+    private suspend fun overdueSetup(): RecurringRepository {
+        repo.create(milk)
+        repo.materialize(d("2026-10-01"), d("2026-10-10"))
+        val oct3 = repo.occurrences("milk")[2]
+        db.transactionDao().insert(
+            Transaction(type = EXPENSE, categoryId = DefaultCategories.MILK_ID, amountPaise = 6_000, date = d("2026-10-03"), occurrenceId = oct3.id)
+        )
+        return repoAt("2026-10-06")
+    }
+
+    private suspend fun assertOverdueUntouched() {
+        val before = repo.occurrences("milk").filter { it.dueDate < d("2026-10-06") }
+        assertEquals(listOf("2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05"), before.map { it.dueDate.toString() })
+        assertTrue(before.all { it.status == OccurrenceStatus.PENDING && it.expectedAmountPaise == 6_000L })
+    }
+
+    @Test fun pauseWithPastStartKeepsOverdueAndLinked() = runTest {
+        val r = overdueSetup()
+        r.pause("milk", d("2026-10-02"))
+        assertOverdueUntouched()
+        assertTrue(due("milk").none { it >= "2026-10-06" })   // future untouched ones removed
+    }
+
+    @Test fun stopWithPastDateKeepsOverdueAndLinked() = runTest {
+        val r = overdueSetup()
+        r.stop("milk", d("2026-10-01"))
+        assertOverdueUntouched()
+        assertTrue(due("milk").none { it >= "2026-10-06" })
+    }
+
+    @Test fun amountChangeWithPastEffectiveDateKeepsOverdueAndLinked() = runTest {
+        val r = overdueSetup()
+        r.changeAmount("milk", d("2026-10-02"), 7_000)
+        assertOverdueUntouched()
+        assertTrue(repo.occurrences("milk").filter { it.dueDate >= d("2026-10-06") }.all { it.expectedAmountPaise == 7_000L })
+    }
+
+    @Test fun skippingPartialWaivesRemainderButReceiptsStayActual() = runTest {
+        repo.create(rent)
+        repo.materialize(d("2026-10-01"), d("2026-10-31"))
+        val oct = repo.occurrences("rent").single()
+        db.transactionDao().insert(
+            Transaction(type = INCOME, categoryId = DefaultCategories.SHOP_RENT_ID, amountPaise = 500_000, date = d("2026-10-31"), occurrenceId = oct.id)
+        )
+        dao.setOccurrenceStatus(oct.id, OccurrenceStatus.PARTIAL)
+        assertEquals(1_000_000L, db.summaryDao().observeExpectedTotals(d("2026-10-01"), d("2026-10-31")).first().incomePaise)
+        repo.skip("rent", d("2026-10-31"))
+        assertEquals(0L, db.summaryDao().observeExpectedTotals(d("2026-10-01"), d("2026-10-31")).first().incomePaise)
+        assertEquals(500_000L, db.summaryDao().observeActualTotals(d("2026-10-01"), d("2026-10-31")).first().incomePaise)
     }
 }

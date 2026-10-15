@@ -28,6 +28,11 @@ class RecurringRepository @Inject constructor(
 ) {
     private val dao: RecurringDao get() = db.recurringDao()
 
+    private fun today(): LocalDate = LocalDate.now(clock)
+
+    /** Cleanup and repricing never reach back before today: overdue items stay as they were. */
+    private fun notBeforeToday(from: LocalDate): LocalDate = maxOf(from, today())
+
     fun observeSchedules(): Flow<List<RecurringSchedule>> = dao.observeSchedules()
     suspend fun get(id: String): RecurringSchedule? = dao.getSchedule(id)
     suspend fun occurrences(scheduleId: String): List<ScheduledOccurrence> = dao.occurrencesFor(scheduleId)
@@ -63,14 +68,21 @@ class RecurringRepository @Inject constructor(
     }
 
     /**
-     * New amount from [effectiveFrom] on. Past, completed, partial, skipped or paid occurrences
-     * keep their snapshot; only untouched PENDING ones on/after the date are repriced.
+     * New amount from [effectiveFrom] on. A second change on the same date replaces the first.
+     * Each untouched PENDING occurrence from maxOf(effectiveFrom, today) is repriced from the
+     * amount in force on *its own* due date using every change, so adding an earlier change
+     * never overwrites a later one. Past, overdue, completed, partial, skipped and linked
+     * occurrences keep their snapshot.
      */
     suspend fun changeAmount(scheduleId: String, effectiveFrom: LocalDate, amountPaise: Long) = db.withTransaction {
         val s = requireNotNull(dao.getSchedule(scheduleId)) { "No schedule $scheduleId" }
         require(!effectiveFrom.isBefore(s.startDate)) { "effectiveFrom before schedule start" }
         dao.upsertAmountChange(ScheduleAmountChange(scheduleId = scheduleId, effectiveFrom = effectiveFrom, amountPaise = amountPaise))
-        dao.repriceOpenFrom(scheduleId, effectiveFrom, amountPaise)
+        val changes = dao.amountChangesFor(listOf(scheduleId))
+        dao.untouchedFrom(scheduleId, notBeforeToday(effectiveFrom)).forEach { o ->
+            val amount = RecurrenceEngine.amountOn(s, changes, o.dueDate)
+            if (amount != o.expectedAmountPaise) dao.setExpectedAmount(o.id, amount)
+        }
         touch(s)
     }
 
@@ -79,7 +91,7 @@ class RecurringRepository @Inject constructor(
         val s = requireNotNull(dao.getSchedule(scheduleId)) { "No schedule $scheduleId" }
         check(s.status == ScheduleStatus.ACTIVE) { "Only an active schedule can be paused" }
         dao.insertPause(SchedulePause(scheduleId = scheduleId, startDate = from))
-        dao.deleteOpenFrom(scheduleId, from)
+        dao.deleteOpenFrom(scheduleId, notBeforeToday(from))
         dao.setStatus(scheduleId, ScheduleStatus.PAUSED, s.endDate, Instant.now(clock))
     }
 
@@ -99,13 +111,15 @@ class RecurringRepository @Inject constructor(
         val end = s.endDate?.let { minOf(it, lastDueDate) } ?: lastDueDate
         require(!end.isBefore(s.startDate.minusDays(1))) { "Stop date before start" }
         dao.openPause(scheduleId)?.let { dao.closePause(it.id, maxOf(it.startDate, end.plusDays(1))) }
-        dao.deleteOpenFrom(scheduleId, end.plusDays(1))
+        dao.deleteOpenFrom(scheduleId, notBeforeToday(end.plusDays(1)))
         dao.setStatus(scheduleId, ScheduleStatus.STOPPED, end, Instant.now(clock))
     }
 
     /**
      * Skip one due date (PRD: "mark skipped without creating an actual transaction"). Creates the
      * occurrence first if it wasn't materialized yet, so a later materialize can't resurrect it.
+     * Skipping a PARTIAL occurrence waives the remaining balance (it leaves expected totals);
+     * receipts already linked stay actual.
      */
     suspend fun skip(scheduleId: String, dueDate: LocalDate) = db.withTransaction {
         val s = requireNotNull(dao.getSchedule(scheduleId)) { "No schedule $scheduleId" }

@@ -50,7 +50,7 @@ interface RecurringDao {
     suspend fun closePause(id: String, endDate: LocalDate)
 
     // --- amount changes ---
-    /** REPLACE: a second change on the same effective date overrides the first. */
+    /** REPLACE: a second change on the same effective date replaces the first (Tech Lead call 5, PRD 5.4). */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAmountChange(change: ScheduleAmountChange)
 
@@ -71,19 +71,24 @@ interface RecurringDao {
     suspend fun setOccurrenceStatus(id: String, status: OccurrenceStatus)
 
     /**
-     * Only untouched future items are rewritten: PENDING with no linked receipt. Completed,
-     * partial, skipped and anything already paid keep their snapshot.
+     * "Untouched" occurrences on/after [from]: PENDING with no linked receipt. Completed, partial,
+     * skipped and paid items are never returned, so they keep their snapshot. Callers pass
+     * maxOf(from, today) so overdue items are never rewritten either.
      */
     @Query(
         """
-        UPDATE scheduled_occurrences SET expectedAmountPaise = :amountPaise
+        SELECT * FROM scheduled_occurrences
         WHERE scheduleId = :scheduleId AND dueDate >= :from AND status = 'PENDING'
           AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.occurrenceId = scheduled_occurrences.id)
+        ORDER BY dueDate
         """
     )
-    suspend fun repriceOpenFrom(scheduleId: String, from: LocalDate, amountPaise: Long): Int
+    suspend fun untouchedFrom(scheduleId: String, from: LocalDate): List<ScheduledOccurrence>
 
-    /** Removes untouched pre-generated items from [from] on (pause/stop). Same safety rule. */
+    @Query("UPDATE scheduled_occurrences SET expectedAmountPaise = :amountPaise WHERE id = :id")
+    suspend fun setExpectedAmount(id: String, amountPaise: Long)
+
+    /** Removes untouched pre-generated items from [from] on (pause/stop). Same safety rule; callers pass maxOf(from, today). */
     @Query(
         """
         DELETE FROM scheduled_occurrences
