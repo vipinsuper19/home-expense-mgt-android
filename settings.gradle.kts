@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HomeNotesTracker"
+rootProject.name = "HomeFinance"
 include(":app")
  

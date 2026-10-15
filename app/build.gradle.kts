@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.dhama.homenotestracker"
+    namespace = "com.dhama.homefinance"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.dhama.homenotestracker"
+        applicationId = "com.dhama.homefinance"
         minSdk = 29
         targetSdk = 37
         versionCode = 1
