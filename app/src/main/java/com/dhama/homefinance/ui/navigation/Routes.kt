@@ -9,6 +9,8 @@ sealed interface Route : NavKey {
     @Serializable data object Recurring : Route
     @Serializable data object Reports : Route
     @Serializable data object Settings : Route
+    /** [transactionId] null = add, otherwise edit. */
+    @Serializable data class AddEditTransaction(val transactionId: String? = null) : Route
 
     companion object {
         /** Destinations shown in the bottom bar, in order. */

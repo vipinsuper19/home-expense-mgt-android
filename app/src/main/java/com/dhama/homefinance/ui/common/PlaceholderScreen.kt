@@ -19,10 +19,12 @@ import com.dhama.homefinance.R
 @Composable
 fun PlaceholderScreen(
     title: String,
-    actions: @Composable RowScope.() -> Unit = {}
+    actions: @Composable RowScope.() -> Unit = {},
+    floatingActionButton: @Composable () -> Unit = {}
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(title) }, actions = actions) }
+        topBar = { TopAppBar(title = { Text(title) }, actions = actions) },
+        floatingActionButton = floatingActionButton
     ) { padding ->
         Box(
             modifier = Modifier.fillMaxSize().padding(padding),
