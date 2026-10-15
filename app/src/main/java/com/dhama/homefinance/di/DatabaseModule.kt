@@ -2,12 +2,15 @@ package com.dhama.homefinance.di
 
 import android.content.Context
 import androidx.room.Room
-import com.dhama.homefinance.data.local.*
+import com.dhama.homefinance.data.local.AppDatabase
+import com.dhama.homefinance.data.local.CategoryDao
+import com.dhama.homefinance.data.local.TransactionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import java.time.Clock
 import javax.inject.Singleton
 
 @Module
@@ -24,4 +27,13 @@ object DatabaseModule {
         ).fallbackToDestructiveMigration(dropAllTables = true).build()
     }
 
+    @Provides
+    fun provideCategoryDao(database: AppDatabase): CategoryDao = database.categoryDao()
+
+    @Provides
+    fun provideTransactionDao(database: AppDatabase): TransactionDao = database.transactionDao()
+
+    @Provides
+    @Singleton
+    fun provideClock(): Clock = Clock.systemDefaultZone()
 }
