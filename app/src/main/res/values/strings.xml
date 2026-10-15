@@ -38,4 +38,15 @@
     <string name="empty_month">No transactions this month. Tap + to add one.</string>
     <string name="empty_filtered">No transactions match these filters.</string>
     <string name="clear_filters">Clear filters</string>
+    <string name="actual_label">Actual</string>
+    <string name="expected_label">Expected</string>
+    <string name="projected_label">Projected</string>
+    <string name="expected_footnote">%1$d upcoming or unpaid item(s). Not included in Actual.</string>
+    <string name="today_label">Today · %1$s</string>
+    <string name="top_expenses">Top expenses</string>
+    <string name="recent_transactions">Recent</string>
+    <string name="transaction_count">%1$d transaction(s)</string>
+    <string name="quick_add_expense">Add expense</string>
+    <string name="quick_add_income">Add income</string>
+    <string name="empty_home">Nothing recorded this month yet. Add an expense or income to get started.</string>
 </resources>

@@ -32,8 +32,12 @@ fun NavGraph(
             when (key) {
                 Route.Home -> NavEntry(key) {
                     HomeScreen(
+                        viewModel = viewModel(),
                         onOpenSettings = { navigationState.push(Route.Settings) },
-                        onAddTransaction = { navigationState.push(Route.AddEditTransaction()) }
+                        onAddTransaction = { type ->
+                            navigationState.push(Route.AddEditTransaction(presetType = type?.name))
+                        },
+                        onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) }
                     )
                 }
                 Route.Transactions -> NavEntry(key) {
@@ -49,7 +53,8 @@ fun NavGraph(
                     AddEditTransactionScreen(
                         viewModel = viewModel(
                             extras = navArgsExtras(
-                                AddEditTransactionViewModel.ARG_TRANSACTION_ID to key.transactionId
+                                AddEditTransactionViewModel.ARG_TRANSACTION_ID to key.transactionId,
+                                AddEditTransactionViewModel.ARG_PRESET_TYPE to key.presetType
                             )
                         ),
                         onDone = { navigationState.onBack() }

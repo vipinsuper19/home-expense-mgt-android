@@ -9,6 +9,7 @@ import com.dhama.homefinance.data.model.DailyTotal
 import com.dhama.homefinance.data.model.TransactionFilter
 import com.dhama.homefinance.data.model.TransactionListItem
 import com.dhama.homefinance.data.model.TransactionType
+import com.dhama.homefinance.data.repository.CategoryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** One day's section: header totals plus its rows (newest day first). */
 data class DaySection(val total: DailyTotal, val items: List<TransactionListItem>) {
@@ -55,6 +57,7 @@ data class TransactionsUiState(
 class TransactionsViewModel @Inject constructor(
     private val savedState: SavedStateHandle,
     private val repository: TransactionListRepository,
+    private val categoryRepository: CategoryRepository,
     clock: Clock
 ) : ViewModel() {
 
@@ -79,16 +82,23 @@ class TransactionsViewModel @Inject constructor(
         combine(
             repository.items(q.month, q.filter),
             repository.dailyTotals(q.month, q.filter),
-            repository.totals(q.month, q.filter),
-            repository.filterCategories(q.month, q.filter.type)
-        ) { items, daily, totals, cats ->
+            repository.filterCategories(q.month, q.filter.type),
+            // Look the selected category up so an archived-but-selected one stays in the chip.
+            kotlinx.coroutines.flow.flow {
+                emit(q.filter.categoryId?.let { categoryRepository.get(it) })
+            }
+        ) { items, daily, cats, selectedCat ->
             val byDate = items.groupBy { it.date }
-            Loaded(
-                q,
-                totals,
-                daily.map { DaySection(it, byDate[it.date].orEmpty()) },
-                cats
+            // Month totals are summed from the same daily rows the list headers use, so
+            // the card and the day headers can never disagree (all Long paise).
+            val totals = ActualTotals(
+                incomePaise = daily.sumOf { it.incomePaise },
+                expensePaise = daily.sumOf { it.expensePaise },
+                transactionCount = items.size
             )
+            val options = if (selectedCat == null || cats.any { it.id == selectedCat.id }) cats
+            else cats + selectedCat
+            Loaded(q, totals, daily.map { DaySection(it, byDate[it.date].orEmpty()) }, options)
         }
     }
 
@@ -121,11 +131,16 @@ class TransactionsViewModel @Inject constructor(
 
     fun setType(value: TransactionType?) {
         savedState[KEY_TYPE] = value?.name
-        // A category of the other type would make the list silently empty.
+        // A category of the other type would make the list silently empty. Look it up in
+        // the DB rather than uiState, which may not be loaded yet after recreation.
         val selected = categoryId.value
         if (value != null && selected != null) {
-            val match = uiState.value.categories.find { it.id == selected }
-            if (match != null && match.type != value) savedState[KEY_CATEGORY] = null
+            viewModelScope.launch {
+                val category = categoryRepository.get(selected)
+                if (category?.type != value && categoryId.value == selected && type.value == value.name) {
+                    savedState[KEY_CATEGORY] = null
+                }
+            }
         }
     }
 
