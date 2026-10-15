@@ -1,4 +1,4 @@
 <resources>
 
-    <style name="Theme.HomeNotesTracker" parent="Theme.MaterialComponents.Light" />
+    <style name="Theme.HomeFinance" parent="Theme.MaterialComponents.Light" />
 </resources>

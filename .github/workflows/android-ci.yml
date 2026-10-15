@@ -23,12 +23,14 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build and unit test
-        run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
+      - name: Build, unit test and lint
+        run: ./gradlew assembleDebug testDebugUnitTest lintDebug --stacktrace
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-reports
-          path: app/build/reports/tests/
+          name: test-and-lint-reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-debug.html
           retention-days: 7
