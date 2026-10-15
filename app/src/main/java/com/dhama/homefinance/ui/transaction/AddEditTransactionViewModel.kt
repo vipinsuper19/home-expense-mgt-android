@@ -239,12 +239,12 @@ class AddEditTransactionViewModel @Inject constructor(
     /** Only applies to add mode; an edited transaction keeps its own type. */
     private fun presetType(): TransactionType? =
         if (transactionId != null) null
-        else savedState.get<String>(ARG_PRESET_TYPE)?.let { runCatching { TransactionType.valueOf(it) }.getOrNull() }
+        else TransactionType.parseOrNull(savedState.get<String>(ARG_PRESET_TYPE))
 
     private fun restoreForm(): TransactionForm? {
         if (savedState.get<Boolean>(KEY_FORM_SAVED) != true) return null
         return TransactionForm(
-            type = savedState.get<String>(KEY_TYPE)?.let(TransactionType::valueOf) ?: TransactionType.EXPENSE,
+            type = TransactionType.parseOrNull(savedState.get<String>(KEY_TYPE)) ?: TransactionType.EXPENSE,
             amountText = savedState[KEY_AMOUNT] ?: "",
             categoryId = savedState[KEY_CATEGORY],
             date = savedState.get<String>(KEY_DATE)?.let(LocalDate::parse) ?: LocalDate.now(clock),

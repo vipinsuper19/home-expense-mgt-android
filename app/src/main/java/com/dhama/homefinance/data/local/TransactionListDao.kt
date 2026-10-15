@@ -2,7 +2,6 @@ package com.dhama.homefinance.data.local
 
 import androidx.room.Dao
 import androidx.room.Query
-import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.Category
 import com.dhama.homefinance.data.model.DailyTotal
 import com.dhama.homefinance.data.model.TransactionListItem
@@ -55,24 +54,19 @@ interface TransactionListDao {
         type: TransactionType?, categoryId: String?, pattern: String?
     ): Flow<List<DailyTotal>>
 
-    /** Same shape as SummaryDao.observeActualTotals, but honouring the list filters. */
+    /** Newest [limit] transactions in the range, with category display fields. */
     @Query(
         """
-        SELECT
-            COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountPaise END), 0) AS incomePaise,
-            COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountPaise END), 0) AS expensePaise,
-            COUNT(*) AS transactionCount
-        FROM transactions
-        WHERE date BETWEEN :from AND :to
-          AND (:type IS NULL OR type = :type)
-          AND (:categoryId IS NULL OR categoryId = :categoryId)
-          AND (:pattern IS NULL OR description LIKE :pattern ESCAPE '\' OR notes LIKE :pattern ESCAPE '\')
+        SELECT t.id, t.type, t.categoryId, c.name AS categoryName, c.icon AS categoryIcon,
+               t.amountPaise, t.quantityMilli, t.description, t.notes, t.date
+        FROM transactions t
+        JOIN categories c ON c.id = t.categoryId
+        WHERE t.date BETWEEN :from AND :to
+        ORDER BY t.date DESC, t.createdAt DESC, t.id
+        LIMIT :limit
         """
     )
-    fun observeTotals(
-        from: LocalDate, to: LocalDate,
-        type: TransactionType?, categoryId: String?, pattern: String?
-    ): Flow<ActualTotals>
+    fun observeRecent(from: LocalDate, to: LocalDate, limit: Int): Flow<List<TransactionListItem>>
 
     /** Active categories plus any (even archived) used in the range, optionally of one type. */
     @Query(

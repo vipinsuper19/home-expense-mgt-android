@@ -20,6 +20,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE id = :id")
     suspend fun getById(id: String): Category?
 
+    @Query("SELECT * FROM categories WHERE id = :id")
+    fun observeById(id: String): Flow<Category?>
+
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 

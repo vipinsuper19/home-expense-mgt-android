@@ -45,6 +45,7 @@ private class FakeCategories : CategoryRepository {
     override fun observeAll() = flowOf(all)
     override fun observeActive(type: TransactionType) = flowOf(all.filter { it.type == type && it.isActive })
     override suspend fun get(id: String) = all.find { it.id == id }
+    override fun observe(id: String) = flowOf(all.find { it.id == id })
     override suspend fun add(category: Category) = Unit
     override suspend fun update(category: Category) = Unit
     override suspend fun setActive(id: String, active: Boolean) = Unit
