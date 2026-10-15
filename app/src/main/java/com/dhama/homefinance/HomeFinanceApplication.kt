@@ -28,6 +28,12 @@ class HomeFinanceApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var categoryRepository: CategoryRepository
 
+    @Inject
+    lateinit var occurrenceMaterializer: com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+
+    @Inject
+    lateinit var dateTicker: com.dhama.homefinance.util.DateTicker
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -36,7 +42,11 @@ class HomeFinanceApplication : Application(), Configuration.Provider {
         scheduleReminders()
         // Defaults are seeded when the DB is created (SeedDefaultsCallback). This top-up is
         // idempotent and only adds defaults introduced by later app versions.
-        appScope.launch { categoryRepository.seedDefaults() }
+        appScope.launch {
+            categoryRepository.seedDefaults()
+            // Generate expected occurrences on start so Home's expected totals are filled.
+            occurrenceMaterializer.materializeAround(dateTicker.now())
+        }
     }
 
     override val workManagerConfiguration: Configuration

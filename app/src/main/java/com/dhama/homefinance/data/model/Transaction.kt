@@ -11,8 +11,11 @@ import java.util.UUID
 /**
  * An actual (realised) income or expense. Expected/unpaid items are never stored here.
  *
- * [scheduleId]/[occurrenceId] are plain nullable columns for now; foreign keys to the
- * recurring tables are added when those tables exist.
+ * [scheduleId] links to the schedule it came from (FK, SET NULL if the schedule row goes).
+ * [occurrenceId] links a receipt/payment to one expected occurrence; adding, editing or
+ * deleting a linked transaction recomputes that occurrence's status (TransactionDao).
+ * Both links are foreign keys with SET NULL. Deleting an occurrence leaves nothing to
+ * recompute (the occurrence is gone); in practice untouched cleanup never deletes linked ones.
  */
 @Entity(
     tableName = "transactions",
@@ -22,6 +25,18 @@ import java.util.UUID
             parentColumns = ["id"],
             childColumns = ["categoryId"],
             onDelete = ForeignKey.RESTRICT
+        ),
+        ForeignKey(
+            entity = RecurringSchedule::class,
+            parentColumns = ["id"],
+            childColumns = ["scheduleId"],
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = ScheduledOccurrence::class,
+            parentColumns = ["id"],
+            childColumns = ["occurrenceId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [

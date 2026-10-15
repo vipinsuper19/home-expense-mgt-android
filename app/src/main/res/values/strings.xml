@@ -49,4 +49,55 @@
     <string name="quick_add_expense">Add expense</string>
     <string name="quick_add_income">Add income</string>
     <string name="empty_home">Nothing recorded this month yet. Add an expense or income to get started.</string>
+
+    <!-- Recurring -->
+    <string name="add_schedule">Add schedule</string>
+    <string name="edit_schedule">Edit schedule</string>
+    <string name="recurring_empty">No recurring schedules yet. Add rent, bills or salary to see what\'s expected.</string>
+    <string name="next_due">Next due %1$s</string>
+    <string name="ends_on">Ends %1$s</string>
+    <string name="frequency_on">%1$s on %2$s</string>
+    <string name="on_day_n">day %1$d</string>
+    <plurals name="every_n_days"><item quantity="one">Every day</item><item quantity="other">Every %1$d days</item></plurals>
+    <plurals name="every_n_weeks"><item quantity="one">Every week</item><item quantity="other">Every %1$d weeks</item></plurals>
+    <plurals name="every_n_months"><item quantity="one">Every month</item><item quantity="other">Every %1$d months</item></plurals>
+    <plurals name="every_n_years"><item quantity="one">Every year</item><item quantity="other">Every %1$d years</item></plurals>
+    <string name="schedule_active">Active</string>
+    <string name="schedule_paused">Paused</string>
+    <string name="schedule_stopped">Stopped</string>
+    <string name="occurrence_upcoming">Upcoming</string>
+    <string name="occurrence_overdue">Overdue</string>
+    <string name="occurrence_partial">Partly settled</string>
+    <string name="occurrence_completed">Done</string>
+    <string name="occurrence_skipped">Skipped</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="stop">Stop</string>
+    <string name="skip">Skip</string>
+    <string name="mark_paid">Mark paid</string>
+    <string name="mark_received">Mark received</string>
+    <string name="paid_amount">Paid %1$s</string>
+    <string name="received_amount">Received %1$s</string>
+    <string name="history">History</string>
+    <string name="history_empty">Nothing due yet.</string>
+    <string name="stop_schedule_title">Stop this schedule?</string>
+    <string name="stop_schedule_message">Nothing after today will be expected. History and anything already paid or received are kept. This can\'t be undone.</string>
+    <string name="action_failed">That couldn\'t be done. It may already be settled or skipped.</string>
+    <string name="schedule_name">Name</string>
+    <string name="amount_effective_from">New amount applies from</string>
+    <string name="amount_future_only">Earlier, overdue and settled items keep their amount</string>
+    <string name="freq_daily">Daily</string>
+    <string name="freq_weekly">Weekly</string>
+    <string name="freq_monthly">Monthly</string>
+    <string name="freq_yearly">Yearly</string>
+    <string name="repeat_every">Repeat every (1 = every time)</string>
+    <string name="weekday">Weekday</string>
+    <string name="month">Month</string>
+    <string name="due_day">Due day (1–31)</string>
+    <string name="due_day_hint">In shorter months it falls on the last day</string>
+    <string name="start_date">Start date</string>
+    <string name="end_date_optional">End date (optional)</string>
+    <string name="rule_locked_hint">Type, category and repeat rule are fixed once created. To change them, stop this schedule and add a new one.</string>
+    <string name="clear">Clear</string>
+    <string name="materialize_failed">Couldn\'t update upcoming items. Try reopening this screen.</string>
 </resources>

@@ -17,6 +17,9 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
     @Binds
+    abstract fun bindOccurrenceMaterializer(impl: com.dhama.homefinance.domain.recurrence.RoomOccurrenceMaterializer): com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+
+    @Binds
     abstract fun bindCategoryRepository(impl: RoomCategoryRepository): CategoryRepository
 
     @Binds

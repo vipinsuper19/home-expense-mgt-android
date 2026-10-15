@@ -2,7 +2,9 @@ package com.dhama.homefinance.data.repository
 
 import androidx.room.withTransaction
 import com.dhama.homefinance.data.local.AppDatabase
+import com.dhama.homefinance.data.local.OccurrenceWithPaid
 import com.dhama.homefinance.data.local.RecurringDao
+import com.dhama.homefinance.data.model.Transaction
 import com.dhama.homefinance.data.model.OccurrenceStatus
 import com.dhama.homefinance.data.model.RecurringSchedule
 import com.dhama.homefinance.data.model.ScheduleAmountChange
@@ -36,6 +38,36 @@ class RecurringRepository @Inject constructor(
     fun observeSchedules(): Flow<List<RecurringSchedule>> = dao.observeSchedules()
     suspend fun get(id: String): RecurringSchedule? = dao.getSchedule(id)
     suspend fun occurrences(scheduleId: String): List<ScheduledOccurrence> = dao.occurrencesFor(scheduleId)
+
+    fun observeSchedule(id: String): Flow<RecurringSchedule?> = dao.observeSchedule(id)
+    fun observeHistory(scheduleId: String): Flow<List<OccurrenceWithPaid>> = dao.observeHistory(scheduleId)
+    fun observeAllPauses(): Flow<List<SchedulePause>> = dao.observeAllPauses()
+    fun observeAllAmountChanges(): Flow<List<ScheduleAmountChange>> = dao.observeAllAmountChanges()
+
+    suspend fun rename(id: String, name: String) {
+        require(name.isNotBlank()) { "name is required" }
+        dao.rename(id, name.trim(), Instant.now(clock))
+    }
+
+    /**
+     * Mark paid / mark received: records an actual [Transaction] linked to the occurrence
+     * (type and category from its snapshot) and recomputes its status. A partial amount
+     * leaves it PARTIAL; the rest can be recorded later.
+     */
+    suspend fun recordPayment(occurrenceId: String, amountPaise: Long, date: LocalDate, notes: String = "") = db.withTransaction {
+        require(amountPaise > 0) { "amount must be positive" }
+        val o = requireNotNull(dao.getOccurrence(occurrenceId)) { "No occurrence $occurrenceId" }
+        check(o.status.isOpen) { "Occurrence is already ${o.status}" }
+        val s = dao.getSchedule(o.scheduleId)
+        val now = Instant.now(clock)
+        db.transactionDao().insertAndRecompute(
+            Transaction(
+                type = o.type, categoryId = o.categoryId, scheduleId = o.scheduleId, occurrenceId = o.id,
+                amountPaise = amountPaise, date = date, description = s?.name.orEmpty(), notes = notes.trim(),
+                createdAt = now, updatedAt = now
+            )
+        )
+    }
 
     suspend fun create(schedule: RecurringSchedule) {
         val now = Instant.now(clock)

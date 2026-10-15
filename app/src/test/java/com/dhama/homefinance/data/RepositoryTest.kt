@@ -59,6 +59,8 @@ private class FakeTransactionDao : TransactionDao {
         rows.value = rows.value.map { if (it.id == transaction.id) transaction else it }
     }
     override suspend fun deleteById(id: String) { rows.value = rows.value.filterNot { it.id == id } }
+    override suspend fun recomputeOccurrenceStatus(occurrenceId: String) {}
+    override suspend fun occurrenceType(occurrenceId: String): com.dhama.homefinance.data.model.TransactionType? = null
 }
 
 class RepositoryTest {
