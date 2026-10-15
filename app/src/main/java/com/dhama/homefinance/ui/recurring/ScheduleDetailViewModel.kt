@@ -6,7 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.dhama.homefinance.data.local.OccurrenceWithPaid
 import com.dhama.homefinance.data.model.RecurringSchedule
 import com.dhama.homefinance.data.model.ScheduleStatus
+import com.dhama.homefinance.data.model.Transaction
+import com.dhama.homefinance.data.repository.RecordResult
 import com.dhama.homefinance.data.repository.RecurringRepository
+import java.util.UUID
 import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
 import com.dhama.homefinance.domain.recurrence.RecurrenceEngine
 import com.dhama.homefinance.ui.transaction.TransactionFormLogic
@@ -26,8 +29,13 @@ import kotlinx.coroutines.launch
 data class HistoryRow(
     val item: OccurrenceWithPaid,
     /** Derived, never stored: still open and due before today. */
-    val isOverdue: Boolean
+    val isOverdue: Boolean,
+    /** Actual receipts/payments linked to this occurrence, oldest first. */
+    val receipts: List<Transaction> = emptyList()
 )
+
+/** Outcome of validating the payment dialog before anything is written. */
+enum class PaymentInput { ACCEPTED, INVALID_AMOUNT, EXCEEDS_OUTSTANDING }
 
 data class ScheduleDetailUiState(
     val loading: Boolean = true,
@@ -60,17 +68,20 @@ class ScheduleDetailViewModel @Inject constructor(
 
     val uiState: StateFlow<ScheduleDetailUiState> = combine(
         repository.observeSchedule(scheduleId),
-        repository.observeHistory(scheduleId),
+        combine(repository.observeHistory(scheduleId), repository.observeReceipts(scheduleId)) { h, r -> h to r },
         combine(repository.observeAllPauses(), repository.observeAllAmountChanges()) { p, c -> p to c },
         today,
         combine(failed, busy, materializeFailed) { f, b, m -> Triple(f, b, m) }
-    ) { s, history, (pauses, changes), day, (fail, isBusy, matFail) ->
+    ) { s, (history, receipts), (pauses, changes), day, (fail, isBusy, matFail) ->
+        val byOccurrence = receipts.groupBy { it.occurrenceId }
         ScheduleDetailUiState(
             loading = false,
             schedule = s,
             currentAmountPaise = s?.let { RecurrenceEngine.amountOn(it, changes.filter { c -> c.scheduleId == it.id }, maxOf(day, it.startDate)) } ?: 0,
             nextDueDate = s?.takeIf { it.status == ScheduleStatus.ACTIVE }?.let { RecurrenceEngine.nextDueDate(it, pauses, day) },
-            history = history.map { HistoryRow(it, it.occurrence.status.isOpen && it.occurrence.dueDate.isBefore(day)) },
+            history = history.map {
+                HistoryRow(it, it.occurrence.status.isOpen && it.occurrence.dueDate.isBefore(day), byOccurrence[it.occurrence.id].orEmpty())
+            },
             today = day,
             actionFailed = fail,
             isBusy = isBusy,
@@ -94,10 +105,16 @@ class ScheduleDetailViewModel @Inject constructor(
      * Returns false (and does nothing) when [amountText] isn't a valid positive amount.
      * While another action is running the call is ignored (double-tap guard) and returns true.
      */
-    fun recordPayment(occurrenceId: String, amountText: String, date: LocalDate): Boolean {
-        val paise = Money.parseRupeesToPaise(amountText) ?: return false
-        act { repository.recordPayment(occurrenceId, paise, date) }
-        return true
+    fun recordPayment(occurrenceId: String, amountText: String, date: LocalDate, receiptId: String = UUID.randomUUID().toString()): PaymentInput {
+        val paise = Money.parseRupeesToPaise(amountText) ?: return PaymentInput.INVALID_AMOUNT
+        val remaining = uiState.value.history.firstOrNull { it.item.occurrence.id == occurrenceId }?.item?.remainingPaise
+        if (remaining != null && paise > remaining) return PaymentInput.EXCEEDS_OUTSTANDING
+        act {
+            // The repository re-checks inside its DB transaction (state may be stale).
+            val result = repository.recordPayment(occurrenceId, paise, date, receiptId = receiptId)
+            check(result !is RecordResult.ExceedsOutstanding) { "Exceeds outstanding" }
+        }
+        return PaymentInput.ACCEPTED
     }
 
     fun dismissError() { failed.value = false }

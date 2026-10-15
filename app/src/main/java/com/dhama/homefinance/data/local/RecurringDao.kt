@@ -11,6 +11,7 @@ import com.dhama.homefinance.data.model.ScheduleAmountChange
 import com.dhama.homefinance.data.model.SchedulePause
 import com.dhama.homefinance.data.model.ScheduleStatus
 import com.dhama.homefinance.data.model.ScheduledOccurrence
+import com.dhama.homefinance.data.model.Transaction
 import java.time.Instant
 import java.time.LocalDate
 import androidx.room.Embedded
@@ -94,6 +95,17 @@ interface RecurringDao {
     )
     fun observeHistory(scheduleId: String): Flow<List<OccurrenceWithPaid>>
 
+    /** Every actual transaction linked to one of the schedule's occurrences. */
+    @Query(
+        """
+        SELECT t.* FROM transactions t
+        JOIN scheduled_occurrences o ON o.id = t.occurrenceId
+        WHERE o.scheduleId = :scheduleId
+        ORDER BY t.date, t.createdAt
+        """
+    )
+    fun observeReceipts(scheduleId: String): Flow<List<Transaction>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertOccurrencesIgnoringExisting(occurrences: List<ScheduledOccurrence>): List<Long>
 
@@ -102,6 +114,9 @@ interface RecurringDao {
 
     @Query("SELECT * FROM scheduled_occurrences WHERE scheduleId = :scheduleId AND dueDate = :dueDate")
     suspend fun occurrenceOn(scheduleId: String, dueDate: LocalDate): ScheduledOccurrence?
+
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM transactions WHERE occurrenceId = :occurrenceId")
+    suspend fun paidFor(occurrenceId: String): Long
 
     @Query("UPDATE scheduled_occurrences SET status = :status WHERE id = :id")
     suspend fun setOccurrenceStatus(id: String, status: OccurrenceStatus)

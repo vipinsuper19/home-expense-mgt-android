@@ -5,6 +5,8 @@ import androidx.room.Query
 import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.CategoryTotal
 import com.dhama.homefinance.data.model.ExpectedTotals
+import com.dhama.homefinance.data.model.OutstandingItem
+import com.dhama.homefinance.data.model.TransactionType
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
@@ -73,4 +75,21 @@ interface SummaryDao {
         """
     )
     fun observeExpectedTotals(from: LocalDate, to: LocalDate): Flow<ExpectedTotals>
+
+    /**
+     * Open occurrences of [type] due on or before [to] (so earlier overdue ones are included)
+     * with their linked receipts summed in SQL. Oldest first.
+     */
+    @Query(
+        """
+        SELECT o.id AS occurrenceId, o.scheduleId, s.name AS scheduleName, o.type, o.dueDate,
+               o.expectedAmountPaise,
+               COALESCE((SELECT SUM(t.amountPaise) FROM transactions t WHERE t.occurrenceId = o.id), 0) AS paidPaise
+        FROM scheduled_occurrences o
+        JOIN recurring_schedules s ON s.id = o.scheduleId
+        WHERE o.type = :type AND o.status IN ('PENDING', 'PARTIAL') AND o.dueDate <= :to
+        ORDER BY o.dueDate, s.name
+        """
+    )
+    fun observeOutstanding(type: TransactionType, to: LocalDate): Flow<List<OutstandingItem>>
 }

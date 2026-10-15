@@ -100,4 +100,10 @@
     <string name="rule_locked_hint">Type, category and repeat rule are fixed once created. To change them, stop this schedule and add a new one.</string>
     <string name="clear">Clear</string>
     <string name="materialize_failed">Couldn\'t update upcoming items. Try reopening this screen.</string>
+    <string name="outstanding_amount">%1$s outstanding</string>
+    <string name="exceeds_outstanding">More than the %1$s outstanding</string>
+    <string name="to_receive_label">To receive</string>
+    <string name="to_receive_footnote">Expected minus what has been received. Not counted in actual income.</string>
+    <string name="due_on">Due %1$s</string>
+    <string name="overdue_since">Overdue since %1$s</string>
 </resources>

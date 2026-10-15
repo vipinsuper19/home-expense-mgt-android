@@ -23,6 +23,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -67,7 +68,7 @@ class RecurringViewModelsTest {
 
     @After fun tearDown() { db.close(); Dispatchers.resetMain() }
 
-    private fun TestScope.collect(flow: kotlinx.coroutines.flow.Flow<*>) = backgroundScope.launch { flow.collect {} }
+    private fun TestScope.collect(flow: Flow<*>) = backgroundScope.launch { flow.collect {} }
 
     // --- list ---
     @Test fun listMaterializesWindowAndShowsNextDueAndCurrentAmount() = runTest(dispatcher) {
@@ -102,8 +103,8 @@ class RecurringViewModelsTest {
         assertTrue(sep.isOverdue)
         assertFalse(vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-11-10") }.isOverdue)
 
-        assertFalse(vm.recordPayment(sep.item.occurrence.id, "0", d("2026-10-15"))) // invalid amount
-        assertTrue(vm.recordPayment(sep.item.occurrence.id, "1,500", d("2026-10-15"))); runCurrent()
+        assertEquals(PaymentInput.INVALID_AMOUNT, vm.recordPayment(sep.item.occurrence.id, "0", d("2026-10-15")))
+        assertEquals(PaymentInput.ACCEPTED, vm.recordPayment(sep.item.occurrence.id, "1,500", d("2026-10-15"))); runCurrent()
         val after = vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-09-10") }
         assertEquals(OccurrenceStatus.PARTIAL, after.item.occurrence.status)
         assertEquals(1_350_000L, after.item.remainingPaise)
@@ -275,5 +276,29 @@ class RecurringViewModelsTest {
     @Test fun windowEndsAtEndOfThirdMonthAhead() {
         assertEquals(d("2026-10-01") to d("2027-01-31"), OccurrenceMaterializer.window(d("2026-10-15")))
         assertEquals(d("2026-11-01") to d("2027-02-28"), OccurrenceMaterializer.window(d("2026-11-30")))
+    }
+
+    // --- milestone 10: rent receipts ---
+    @Test fun paymentAboveOutstandingIsRejectedBeforeWriting() = runTest(dispatcher) {
+        repo.create(rent)
+        val vm = detail(); collect(vm.uiState); runCurrent()
+        val occ = vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-10-10") }.item.occurrence.id
+        assertEquals(PaymentInput.ACCEPTED, vm.recordPayment(occ, "10,000", d("2026-10-15"))); runCurrent()
+        assertEquals(PaymentInput.EXCEEDS_OUTSTANDING, vm.recordPayment(occ, "5,000.01", d("2026-10-15")))
+        assertEquals(PaymentInput.ACCEPTED, vm.recordPayment(occ, "5,000", d("2026-10-15"))); runCurrent()
+        val row = vm.uiState.value.history.single { it.item.occurrence.id == occ }
+        assertEquals(OccurrenceStatus.COMPLETED, row.item.occurrence.status)
+        assertEquals(listOf(1_000_000L, 500_000L), row.receipts.map { it.amountPaise })
+    }
+
+    @Test fun sameReceiptIdSubmittedTwiceRecordsOnce() = runTest(dispatcher) {
+        repo.create(rent)
+        val vm = detail(); collect(vm.uiState); runCurrent()
+        val occ = vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-10-10") }.item.occurrence.id
+        vm.recordPayment(occ, "1,000", d("2026-10-15"), receiptId = "rcpt-1"); runCurrent()
+        // e.g. resubmitted after process death with the saved dialog id
+        vm.recordPayment(occ, "1,000", d("2026-10-15"), receiptId = "rcpt-1"); runCurrent()
+        assertEquals(1, vm.uiState.value.history.single { it.item.occurrence.id == occ }.receipts.size)
+        assertFalse(vm.uiState.value.actionFailed)
     }
 }

@@ -1,5 +1,8 @@
 package com.dhama.homefinance.ui.home
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.SavedStateHandle
 import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.Category
@@ -12,6 +15,7 @@ import com.dhama.homefinance.data.model.TransactionType
 import com.dhama.homefinance.data.model.TransactionType.EXPENSE
 import com.dhama.homefinance.data.model.TransactionType.INCOME
 import com.dhama.homefinance.data.repository.SummaryRepository
+import com.dhama.homefinance.data.model.OutstandingItem
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
 import com.dhama.homefinance.util.DateTicker
@@ -49,8 +53,11 @@ private fun item(date: String, amount: Long, type: TransactionType, category: St
 
 private class FakeSummary(
     private val months: Map<YearMonth, Triple<ActualTotals, List<CategoryTotal>, ExpectedTotals>>,
-    private val today: Map<LocalDate, ActualTotals> = emptyMap()
+    private val today: Map<LocalDate, ActualTotals> = emptyMap(),
+    private val owed: List<OutstandingItem> = emptyList()
 ) : SummaryRepository {
+    override fun outstanding(type: TransactionType, to: LocalDate) =
+        flowOf(owed.filter { it.type == type && !it.dueDate.isAfter(to) })
     override fun actualTotals(from: LocalDate, to: LocalDate): Flow<ActualTotals> {
         if (from == to) return flowOf(today[from] ?: ActualTotals(0, 0, 0))
         val m = YearMonth.from(from)
@@ -214,8 +221,8 @@ class HomeViewModelTest {
         backgroundScope.launch { vm.uiState.collect {} }
         runCurrent()
         clock.now = Instant.parse("2026-10-15T18:31:00Z") // 00:01 IST on the 16th
-        ticker.resumeObserver.onResume(object : androidx.lifecycle.LifecycleOwner {
-            override val lifecycle: androidx.lifecycle.Lifecycle = androidx.lifecycle.LifecycleRegistry.createUnsafe(this)
+        ticker.resumeObserver.onResume(object : LifecycleOwner {
+            override val lifecycle: Lifecycle = LifecycleRegistry.createUnsafe(this)
         })
         runCurrent()
         assertEquals(LocalDate.of(2026, 10, 16), ui.today)
@@ -236,5 +243,19 @@ class HomeViewModelTest {
         clock.now = Instant.parse("2026-10-15T18:31:00Z")
         advanceTimeBy(DateTicker.CHECK_INTERVAL_MS + 1); runCurrent()
         assertEquals(LocalDate.of(2026, 10, 16), materialized.last())
+    }
+
+    @Test fun toReceiveListsOwedIncomeUpToMonthEnd() = runTest(dispatcher) {
+        fun owed(id: String, due: String, type: TransactionType = TransactionType.INCOME, paid: Long = 0) =
+            OutstandingItem(id, "rent", "Shop rent", type, LocalDate.parse(due), 1_500_000, paid)
+        val s = FakeSummary(
+            emptyMap(),
+            owed = listOf(owed("sep", "2026-09-05", paid = 1_000_000), owed("oct", "2026-10-05"), owed("nov", "2026-11-05"), owed("bill", "2026-10-20", TransactionType.EXPENSE))
+        )
+        val home = HomeViewModel(SavedStateHandle(), ObserveMonthlySummaryUseCase(s), s, list, ticker, materializer)
+        backgroundScope.launch { home.uiState.collect {} }
+        runCurrent()
+        assertEquals(listOf("sep", "oct"), home.uiState.value.toReceive.map { it.occurrenceId })
+        assertEquals(500_000L + 1_500_000L, home.uiState.value.toReceivePaise)
     }
 }

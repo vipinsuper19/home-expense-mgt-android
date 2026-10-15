@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.dhama.homefinance.data.model.Transaction
+import com.dhama.homefinance.data.model.TransactionType
+import androidx.room.Transaction as DbTransaction
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
@@ -56,21 +58,21 @@ interface TransactionDao {
     )
     suspend fun recomputeOccurrenceStatus(occurrenceId: String)
 
-    @androidx.room.Transaction
+    @DbTransaction
     suspend fun insertAndRecompute(transaction: Transaction) {
         insert(transaction)
         transaction.occurrenceId?.let { recomputeOccurrenceStatus(it) }
     }
 
     @Query("SELECT type FROM scheduled_occurrences WHERE id = :occurrenceId")
-    suspend fun occurrenceType(occurrenceId: String): com.dhama.homefinance.data.model.TransactionType?
+    suspend fun occurrenceType(occurrenceId: String): TransactionType?
 
     /**
      * Recomputes both the old and the new occurrence when the link or amount changes.
      * If the type no longer matches the linked occurrence, the link is dropped (a payment
      * can't settle a receipt) and the occurrence is recomputed. The UI also locks the type.
      */
-    @androidx.room.Transaction
+    @DbTransaction
     suspend fun updateAndRecompute(transaction: Transaction) {
         val old = getById(transaction.id)?.occurrenceId
         val linkedType = transaction.occurrenceId?.let { occurrenceType(it) }
@@ -79,7 +81,7 @@ interface TransactionDao {
         setOfNotNull(old, toSave.occurrenceId).forEach { recomputeOccurrenceStatus(it) }
     }
 
-    @androidx.room.Transaction
+    @DbTransaction
     suspend fun deleteAndRecompute(id: String) {
         val old = getById(id)?.occurrenceId
         deleteById(id)
