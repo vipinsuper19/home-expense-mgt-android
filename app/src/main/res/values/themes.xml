@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.HomeNotesTracker" parent="Theme.MaterialComponents.Light" />
+</resources>
