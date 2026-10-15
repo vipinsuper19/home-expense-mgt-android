@@ -4,14 +4,18 @@ package com.dhama.homefinance.util
 object Money {
     private val pattern = Regex("""^\d{1,13}(\.\d{0,2})?$""")
 
-    /** Parses user input like "1,250.5" or "₹ 99" into paise; null if invalid. */
+    /**
+     * Parses a user-entered amount like "1,250.5" or "₹ 99" into paise.
+     * Returns null if invalid, including zero ("0", "0.00"): amounts must be positive.
+     */
     fun parseRupeesToPaise(input: String): Long? {
         val cleaned = input.trim().removePrefix("₹").trim().replace(",", "")
         if (!pattern.matches(cleaned)) return null
         val parts = cleaned.split('.')
         val rupees = parts[0].toLong()
         val fraction = parts.getOrNull(1).orEmpty().padEnd(2, '0')
-        return Math.addExact(Math.multiplyExact(rupees, 100L), fraction.toLong())
+        val paise = Math.addExact(Math.multiplyExact(rupees, 100L), fraction.toLong())
+        return paise.takeIf { it > 0 }
     }
 
     /** Formats paise in Indian digit grouping, e.g. 12345678 -> "₹1,23,456.78". */

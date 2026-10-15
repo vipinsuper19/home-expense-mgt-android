@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.dhama.homefinance.data.local.AppDatabase
 import com.dhama.homefinance.data.local.CategoryDao
+import com.dhama.homefinance.data.local.SeedDefaultsCallback
 import com.dhama.homefinance.data.local.TransactionDao
 import dagger.Module
 import dagger.Provides
@@ -24,7 +25,13 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "home_finance.db"
-        ).fallbackToDestructiveMigration(dropAllTables = true).build()
+        )
+            .addCallback(SeedDefaultsCallback)
+            // TODO(before first release): remove the destructive fallback and add real
+            //  migrations (with MigrationTestHelper tests against app/schemas); otherwise a
+            //  schema change would wipe users' data.
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
 
     @Provides

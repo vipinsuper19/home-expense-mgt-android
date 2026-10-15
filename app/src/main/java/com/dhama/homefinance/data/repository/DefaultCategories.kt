@@ -4,6 +4,9 @@ import com.dhama.homefinance.data.model.Category
 import com.dhama.homefinance.data.model.TransactionType
 import com.dhama.homefinance.data.model.TransactionType.EXPENSE
 import com.dhama.homefinance.data.model.TransactionType.INCOME
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.util.UUID
 
 /**
@@ -48,4 +51,20 @@ object DefaultCategories {
 
     val MILK_ID: String = idFor("milk")
     val SHOP_RENT_ID: String = idFor("shop_rent")
+
+    /** Raw insert used by the Room onCreate callback (DAOs aren't usable there). */
+    fun insertInto(db: SupportSQLiteDatabase) {
+        all.forEach { c ->
+            val values = ContentValues().apply {
+                put("id", c.id)
+                put("name", c.name)
+                put("type", c.type.name)
+                put("icon", c.icon)
+                put("isDefault", if (c.isDefault) 1 else 0)
+                put("isActive", if (c.isActive) 1 else 0)
+                put("sortOrder", c.sortOrder)
+            }
+            db.insert("categories", SQLiteDatabase.CONFLICT_IGNORE, values)
+        }
+    }
 }

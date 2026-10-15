@@ -14,6 +14,12 @@ class MoneyTest {
         assertEquals(10000L, Money.parseRupeesToPaise("100."))
     }
 
+    @Test fun rejectsZero() {
+        listOf("0", "0.00", "0.0", "0.", "₹ 0", "000", "0,000.00").forEach {
+            assertNull(it, Money.parseRupeesToPaise(it))
+        }
+    }
+
     @Test fun rejectsInvalidInput() {
         listOf("", "abc", "-5", "1.234", "1e3", ".5", "12345678901234").forEach {
             assertNull(it, Money.parseRupeesToPaise(it))

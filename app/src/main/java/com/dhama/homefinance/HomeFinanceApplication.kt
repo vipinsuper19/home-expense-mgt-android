@@ -34,7 +34,8 @@ class HomeFinanceApplication : Application(), Configuration.Provider {
         super.onCreate()
         notificationHelper.createNotificationChannel()
         scheduleReminders()
-        // Idempotent: only inserts default categories that are missing.
+        // Defaults are seeded when the DB is created (SeedDefaultsCallback). This top-up is
+        // idempotent and only adds defaults introduced by later app versions.
         appScope.launch { categoryRepository.seedDefaults() }
     }
 
