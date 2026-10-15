@@ -305,4 +305,24 @@ class AddEditTransactionViewModelTest {
         assertFalse(ui.isEdit)
         assertEquals(0, txRepo.gets)
     }
+
+    @Test fun presetTypeFromQuickActionPreselectsIncomeInAddMode() = runTest(dispatcher) {
+        val handle = SavedStateHandle(mapOf(
+            AddEditTransactionViewModel.ARG_TRANSACTION_ID to null,
+            AddEditTransactionViewModel.ARG_PRESET_TYPE to "INCOME"
+        ))
+        collect(); vm = newVm(null, handle); advanceUntilIdle()
+        assertEquals(INCOME, ui.form.type)
+        assertEquals(listOf("salary"), ui.categories.map { it.id })
+    }
+
+    @Test fun presetTypeIsIgnoredWhenEditing() = runTest(dispatcher) {
+        txRepo.rows.value = listOf(existing())
+        val handle = SavedStateHandle(mapOf(
+            AddEditTransactionViewModel.ARG_TRANSACTION_ID to "t1",
+            AddEditTransactionViewModel.ARG_PRESET_TYPE to "INCOME"
+        ))
+        collect(); vm = newVm("t1", handle); advanceUntilIdle()
+        assertEquals(EXPENSE, ui.form.type)
+    }
 }

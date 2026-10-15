@@ -80,7 +80,10 @@ class AddEditTransactionViewModel @Inject constructor(
 
     private val state = MutableStateFlow(
         AddEditUiState(
-            form = restoreForm() ?: TransactionForm(date = LocalDate.now(clock)),
+            form = restoreForm() ?: TransactionForm(
+                type = presetType() ?: TransactionType.EXPENSE,
+                date = LocalDate.now(clock)
+            ),
             isEdit = transactionId != null
         )
     )
@@ -233,6 +236,11 @@ class AddEditTransactionViewModel @Inject constructor(
         savedState[KEY_QUANTITY_TOUCHED] = f.quantityTouched
     }
 
+    /** Only applies to add mode; an edited transaction keeps its own type. */
+    private fun presetType(): TransactionType? =
+        if (transactionId != null) null
+        else savedState.get<String>(ARG_PRESET_TYPE)?.let { runCatching { TransactionType.valueOf(it) }.getOrNull() }
+
     private fun restoreForm(): TransactionForm? {
         if (savedState.get<Boolean>(KEY_FORM_SAVED) != true) return null
         return TransactionForm(
@@ -251,6 +259,8 @@ class AddEditTransactionViewModel @Inject constructor(
     companion object {
         /** Nav argument key; matches Route.AddEditTransaction.transactionId. */
         const val ARG_TRANSACTION_ID = "transactionId"
+        /** Nav argument key; matches Route.AddEditTransaction.presetType. */
+        const val ARG_PRESET_TYPE = "presetType"
         internal const val KEY_FORM_SAVED = "form.saved"
         internal const val KEY_TYPE = "form.type"
         internal const val KEY_AMOUNT = "form.amountText"

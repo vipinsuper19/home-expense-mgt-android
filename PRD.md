@@ -120,7 +120,8 @@ duplicate saves from rapid taps.
 
 -   Chronological list of transactions.
 -   Filters for date/month, type, and category.
--   Search by description.
+-   Search by description and notes. Matching ignores case for English
+    letters only (A–Z / a–z); other scripts are matched exactly.
 -   Daily totals and monthly summary.
 -   Open a transaction to view, edit, or delete it.
 -   Visually distinguish income from expenses.

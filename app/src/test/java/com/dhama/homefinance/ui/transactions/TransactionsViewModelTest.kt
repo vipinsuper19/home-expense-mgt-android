@@ -9,6 +9,7 @@ import com.dhama.homefinance.data.model.TransactionListItem
 import com.dhama.homefinance.data.model.TransactionType
 import com.dhama.homefinance.data.model.TransactionType.EXPENSE
 import com.dhama.homefinance.data.model.TransactionType.INCOME
+import com.dhama.homefinance.data.repository.CategoryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import java.time.Clock
 import java.time.Instant
@@ -84,8 +85,24 @@ class TransactionsViewModelTest {
             item("2026-10-05", 5_000_000, INCOME, "salary", "salary")
         ))
         handle = SavedStateHandle()
-        vm = TransactionsViewModel(handle, repo, clock)
+        categories = object : CategoryRepository {
+            private val all = listOf(
+                Category("milk", "Milk", EXPENSE, "x"),
+                Category("salary", "Salary", INCOME, "x"),
+                Category("pets", "Pets", EXPENSE, "x", isActive = false)
+            )
+            override fun observeAll() = flowOf(all)
+            override fun observeActive(type: TransactionType) = flowOf(all.filter { it.type == type && it.isActive })
+            override suspend fun get(id: String) = all.find { it.id == id }
+            override suspend fun add(category: Category) = Unit
+            override suspend fun update(category: Category) = Unit
+            override suspend fun setActive(id: String, active: Boolean) = Unit
+            override suspend fun seedDefaults() = Unit
+        }
+        vm = TransactionsViewModel(handle, repo, categories, clock)
     }
+
+    private lateinit var categories: CategoryRepository
 
     @After fun tearDown() = Dispatchers.resetMain()
 
@@ -145,7 +162,7 @@ class TransactionsViewModelTest {
 
     @Test fun filterStateSurvivesRecreationFromSavedStateHandle() = runTest(dispatcher) {
         vm.previousMonth(); vm.setType(INCOME); vm.setCategory("salary"); vm.setSearch("sal")
-        val restored = TransactionsViewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }), repo, clock)
+        val restored = TransactionsViewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }), repo, categories, clock)
         backgroundScope.launch { restored.uiState.collect {} }
         advanceUntilIdle()
         val s = restored.uiState.value
@@ -168,5 +185,39 @@ class TransactionsViewModelTest {
         assertEquals(2, ui.categories.size)
         vm.setType(INCOME); advanceUntilIdle()
         assertEquals(listOf("salary"), ui.categories.map { it.id })
+    }
+
+    @Test fun setTypeClearsCategoryViaRepositoryEvenWhenUiEmpty() = runTest(dispatcher) {
+        // After recreation, uiState.categories can be empty until data loads; setType must
+        // still clear a mismatched category by querying the repository.
+        handle[TransactionsViewModel.KEY_CATEGORY] = "milk"
+        handle[TransactionsViewModel.KEY_TYPE] = null
+        val fresh = TransactionsViewModel(handle, repo, categories, clock)
+        // Don't collect: categories stay empty in the initial state.
+        assertTrue(fresh.uiState.value.categories.isEmpty())
+        fresh.setType(INCOME)
+        advanceUntilIdle()
+        assertNull(handle.get<String>(TransactionsViewModel.KEY_CATEGORY))
+        assertEquals(INCOME.name, handle.get(TransactionsViewModel.KEY_TYPE))
+    }
+
+    @Test fun selectedCategoryStaysListedWhenMissingFromNewMonth() = runTest(dispatcher) {
+        // Selecting an archived category (kept via #6 filter options when used) then
+        // navigating to an empty month must still show it while selected.
+        val emptyRepo = FakeListRepository(emptyList())
+        // Override filterCategories to never include "pets".
+        val cats = categories
+        val repoWithPetsSelected = object : TransactionListRepository by emptyRepo {
+            override fun filterCategories(month: YearMonth, type: TransactionType?) =
+                emptyRepo.filterCategories(month, type) // no pets
+        }
+        backgroundScope.launch { vm.uiState.collect {} }
+        // Seed selection of pets on the original VM via handle, rebuild with empty-month repo.
+        handle[TransactionsViewModel.KEY_CATEGORY] = "pets"
+        val rebuilt = TransactionsViewModel(handle, repoWithPetsSelected, cats, clock)
+        backgroundScope.launch { rebuilt.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(listOf("milk", "salary", "pets"), rebuilt.uiState.value.categories.map { it.id })
+        assertEquals("pets", rebuilt.uiState.value.categoryId)
     }
 }
