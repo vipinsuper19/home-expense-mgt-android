@@ -44,13 +44,22 @@ fun RecurringScreen(
             }
         }
     ) { padding ->
-        if (!state.loading && state.rows.isEmpty()) {
+        if (!state.loading && state.rows.isEmpty() && !state.materializeFailed) {
             Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.recurring_empty), style = MaterialTheme.typography.bodyLarge)
             }
             return@Scaffold
         }
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            if (state.materializeFailed) {
+                item {
+                    Text(
+                        stringResource(R.string.materialize_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
             items(state.rows, key = { it.schedule.id }) { row ->
                 val s = row.schedule
                 val sign = if (s.type == TransactionType.INCOME) "+" else "−"

@@ -150,4 +150,25 @@ class TransactionOccurrenceLinkTest {
         assertEquals("Rent (shop 2)", recurring.get("rent")!!.name)
         assertTrue(runCatching { recurring.rename("rent", " ") }.isFailure)
     }
+
+    @Test fun switchingTypeOfLinkedTransactionUnlinksAndRecomputes() = runTest {
+        val occ = setup()
+        transactions.add(receipt(occ, 1_500_000))
+        assertEquals(OccurrenceStatus.COMPLETED, status())
+        transactions.update(receipt(occ, 1_500_000).copy(type = EXPENSE, categoryId = DefaultCategories.MILK_ID))
+        assertNull(transactions.get("r1")!!.occurrenceId)
+        assertEquals(OccurrenceStatus.PENDING, status())
+    }
+
+    @Test fun deletingOccurrenceSetsTransactionOccurrenceIdToNull() = runTest {
+        val occ = setup()
+        transactions.add(receipt(occ, 100))
+        db.openHelper.writableDatabase.execSQL("DELETE FROM scheduled_occurrences WHERE id = '$occ'")
+        assertNull(transactions.get("r1")!!.occurrenceId)
+    }
+
+    @Test fun transactionCannotLinkToMissingOccurrence() = runTest {
+        setup()
+        assertTrue(runCatching { transactions.add(receipt("nope", 100)) }.isFailure)
+    }
 }

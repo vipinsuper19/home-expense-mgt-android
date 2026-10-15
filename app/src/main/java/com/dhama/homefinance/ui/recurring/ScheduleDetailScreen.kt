@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import com.dhama.homefinance.R
 import com.dhama.homefinance.data.model.ScheduleStatus
 import com.dhama.homefinance.data.model.TransactionType
-import com.dhama.homefinance.ui.transaction.TransactionFormLogic
 import com.dhama.homefinance.util.Money
 import java.time.LocalDate
 
@@ -81,11 +80,14 @@ fun ScheduleDetailScreen(
                     Text("${stringResource(if (income) R.string.type_income else R.string.type_expense)} · ${frequencyText(s)}")
                     Text(statusText(s.status), style = MaterialTheme.typography.labelLarge)
                     state.nextDueDate?.let { Text(stringResource(R.string.next_due, it.medium())) }
+                    if (state.materializeFailed) {
+                        Text(stringResource(R.string.materialize_failed), color = MaterialTheme.colorScheme.error)
+                    }
                     s.endDate?.let { Text(stringResource(R.string.ends_on, it.medium())) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         when (s.status) {
-                            ScheduleStatus.ACTIVE -> OutlinedButton(onClick = viewModel::pause) { Text(stringResource(R.string.pause)) }
-                            ScheduleStatus.PAUSED -> OutlinedButton(onClick = viewModel::resume) { Text(stringResource(R.string.resume)) }
+                            ScheduleStatus.ACTIVE -> OutlinedButton(enabled = !state.isBusy, onClick = viewModel::pause) { Text(stringResource(R.string.pause)) }
+                            ScheduleStatus.PAUSED -> OutlinedButton(enabled = !state.isBusy, onClick = viewModel::resume) { Text(stringResource(R.string.resume)) }
                             ScheduleStatus.STOPPED -> Unit
                         }
                         if (s.status != ScheduleStatus.STOPPED) {
@@ -118,11 +120,11 @@ fun ScheduleDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     TextButton(onClick = {
                                         payFor = o.id
-                                        payAmount = TransactionFormLogic.formatPaiseForInput(row.item.remainingPaise)
+                                        payAmount = viewModel.paymentPrefill(o.id)
                                         payDate = state.today.toString()
                                         payError = false
                                     }) { Text(stringResource(if (income) R.string.mark_received else R.string.mark_paid)) }
-                                    TextButton(onClick = { viewModel.skip(o.dueDate) }) { Text(stringResource(R.string.skip)) }
+                                    TextButton(enabled = !state.isBusy, onClick = { viewModel.skip(o.dueDate) }) { Text(stringResource(R.string.skip)) }
                                 }
                             }
                         }
@@ -139,7 +141,7 @@ fun ScheduleDetailScreen(
             onDismissRequest = { confirmStop = false },
             title = { Text(stringResource(R.string.stop_schedule_title)) },
             text = { Text(stringResource(R.string.stop_schedule_message)) },
-            confirmButton = { TextButton(onClick = { viewModel.stop(); confirmStop = false }) { Text(stringResource(R.string.stop)) } },
+            confirmButton = { TextButton(enabled = !state.isBusy, onClick = { viewModel.stop(); confirmStop = false }) { Text(stringResource(R.string.stop)) } },
             dismissButton = { TextButton(onClick = { confirmStop = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
@@ -171,7 +173,7 @@ fun ScheduleDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !state.isBusy, onClick = {
                     val date = payDate?.let(LocalDate::parse) ?: state.today
                     if (viewModel.recordPayment(occurrenceId, payAmount, date)) payFor = null else payError = true
                 }) { Text(stringResource(R.string.save)) }

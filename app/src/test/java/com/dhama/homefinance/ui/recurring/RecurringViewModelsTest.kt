@@ -15,6 +15,8 @@ import com.dhama.homefinance.data.repository.DefaultCategories
 import com.dhama.homefinance.data.repository.RecurringRepository
 import com.dhama.homefinance.data.repository.RoomCategoryRepository
 import com.dhama.homefinance.util.DateTicker
+import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+import com.dhama.homefinance.domain.recurrence.RoomOccurrenceMaterializer
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -71,7 +73,7 @@ class RecurringViewModelsTest {
     @Test fun listMaterializesWindowAndShowsNextDueAndCurrentAmount() = runTest(dispatcher) {
         repo.create(rent)
         repo.changeAmount("rent", d("2026-10-01"), 1_600_000)
-        val vm = RecurringListViewModel(repo, ticker)
+        val vm = RecurringListViewModel(repo, RoomOccurrenceMaterializer(repo), ticker)
         collect(vm.uiState); runCurrent()
         val row = vm.uiState.value.rows.single()
         assertEquals(1_600_000L, row.currentAmountPaise)
@@ -81,7 +83,7 @@ class RecurringViewModelsTest {
     }
 
     @Test fun listEmptyStateAndPausedHasNoNextDue() = runTest(dispatcher) {
-        val vm = RecurringListViewModel(repo, ticker)
+        val vm = RecurringListViewModel(repo, RoomOccurrenceMaterializer(repo), ticker)
         collect(vm.uiState); runCurrent()
         assertFalse(vm.uiState.value.loading)
         assertTrue(vm.uiState.value.rows.isEmpty())
@@ -90,7 +92,7 @@ class RecurringViewModelsTest {
     }
 
     // --- detail ---
-    private fun detail() = ScheduleDetailViewModel(SavedStateHandle(mapOf(ScheduleDetailViewModel.ARG_SCHEDULE_ID to "rent")), repo, ticker)
+    private fun detail(materializer: OccurrenceMaterializer = RoomOccurrenceMaterializer(repo)) = ScheduleDetailViewModel(SavedStateHandle(mapOf(ScheduleDetailViewModel.ARG_SCHEDULE_ID to "rent")), repo, materializer, ticker)
 
     @Test fun detailHistoryDerivesOverdueAndActionsWork() = runTest(dispatcher) {
         repo.create(rent)
@@ -224,5 +226,54 @@ class RecurringViewModelsTest {
         val f = restored.uiState.value.form
         assertEquals("Water", f.name); assertEquals("300", f.amountText)
         assertEquals(Frequency.YEARLY, f.frequency); assertEquals(4, f.monthOfYear)
+    }
+
+    // --- review round 1 ---
+    @Test fun doubleTapRecordsOnlyOnePayment() = runTest(dispatcher) {
+        repo.create(rent)
+        val vm = detail(); collect(vm.uiState); runCurrent()
+        val occ = vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-10-10") }.item.occurrence.id
+        // Two taps before the first coroutine runs.
+        vm.recordPayment(occ, "1,000", d("2026-10-15"))
+        vm.recordPayment(occ, "1,000", d("2026-10-15"))
+        runCurrent()
+        val linked = db.transactionDao().observeBetween(d("2026-10-01"), d("2026-10-31")).first()
+        assertEquals(1, linked.size)
+        assertEquals(100_000L, linked.single().amountPaise)
+        assertFalse(vm.uiState.value.isBusy)
+        // Once idle, the next payment goes through.
+        vm.recordPayment(occ, "500", d("2026-10-15")); runCurrent()
+        assertEquals(2, db.transactionDao().observeBetween(d("2026-10-01"), d("2026-10-31")).first().size)
+    }
+
+    @Test fun paymentPrefillIsTheRemainingAmount() = runTest(dispatcher) {
+        repo.create(rent)
+        val vm = detail(); collect(vm.uiState); runCurrent()
+        val occ = vm.uiState.value.history.single { it.item.occurrence.dueDate == d("2026-10-10") }.item.occurrence.id
+        assertEquals("15000", vm.paymentPrefill(occ).substringBefore('.'))
+        vm.recordPayment(occ, "4,000.50", d("2026-10-15")); runCurrent()
+        assertEquals("10999.50", vm.paymentPrefill(occ))
+        vm.recordPayment(occ, "10999.50", d("2026-10-15")); runCurrent()
+        assertEquals("", vm.paymentPrefill(occ))
+    }
+
+    @Test fun failedMaterializeKeepsDetailWorkingAndFlagsIt() = runTest(dispatcher) {
+        repo.create(rent)
+        val vm = detail(OccurrenceMaterializer { false }); collect(vm.uiState); runCurrent()
+        assertTrue(vm.uiState.value.materializeFailed)
+        assertEquals("Shop rent", vm.uiState.value.schedule!!.name)
+        vm.pause(); runCurrent()
+        assertEquals(ScheduleStatus.PAUSED, vm.uiState.value.schedule!!.status)
+    }
+
+    @Test fun throwingMaterializeIsCaught() = runTest(dispatcher) {
+        repo.create(rent)
+        db.close() // every query now throws
+        assertFalse(RoomOccurrenceMaterializer(repo).materializeAround(d("2026-10-15")))
+    }
+
+    @Test fun windowEndsAtEndOfThirdMonthAhead() {
+        assertEquals(d("2026-10-01") to d("2027-01-31"), OccurrenceMaterializer.window(d("2026-10-15")))
+        assertEquals(d("2026-11-01") to d("2027-02-28"), OccurrenceMaterializer.window(d("2026-11-30")))
     }
 }

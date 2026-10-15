@@ -52,6 +52,8 @@ data class AddEditUiState(
     val form: TransactionForm,
     val categories: List<Category> = emptyList(),
     val isEdit: Boolean = false,
+    /** Linked to a scheduled occurrence: the type must match it, so the toggle is locked. */
+    val typeLocked: Boolean = false,
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val saveFailed: Boolean = false,
@@ -84,7 +86,8 @@ class AddEditTransactionViewModel @Inject constructor(
                 type = presetType() ?: TransactionType.EXPENSE,
                 date = LocalDate.now(clock)
             ),
-            isEdit = transactionId != null
+            isEdit = transactionId != null,
+            typeLocked = savedState.get<Boolean>(KEY_TYPE_LOCKED) == true
         )
     )
 
@@ -119,6 +122,8 @@ class AddEditTransactionViewModel @Inject constructor(
                 state.update { it.copy(isLoading = false, done = true) }
                 return@launch
             }
+            savedState[KEY_TYPE_LOCKED] = tx.occurrenceId != null
+            state.update { it.copy(typeLocked = tx.occurrenceId != null) }
             setForm(
                 TransactionForm(
                     type = tx.type,
@@ -142,7 +147,7 @@ class AddEditTransactionViewModel @Inject constructor(
     private fun edit(block: (TransactionForm) -> TransactionForm) = setForm(block(state.value.form))
 
     fun setType(type: TransactionType) = edit {
-        if (it.type == type) it else it.copy(type = type, categoryId = null)
+        if (it.type == type || state.value.typeLocked) it else it.copy(type = type, categoryId = null)
     }
 
     fun setAmount(text: String) = edit { it.copy(amountText = text, amountTouched = true) }
@@ -261,6 +266,7 @@ class AddEditTransactionViewModel @Inject constructor(
         const val ARG_TRANSACTION_ID = "transactionId"
         /** Nav argument key; matches Route.AddEditTransaction.presetType. */
         const val ARG_PRESET_TYPE = "presetType"
+        internal const val KEY_TYPE_LOCKED = "typeLocked"
         internal const val KEY_FORM_SAVED = "form.saved"
         internal const val KEY_TYPE = "form.type"
         internal const val KEY_AMOUNT = "form.amountText"

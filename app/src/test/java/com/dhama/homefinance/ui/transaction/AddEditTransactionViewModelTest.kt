@@ -264,7 +264,7 @@ class AddEditTransactionViewModelTest {
     }
 
     @Test fun restoresFormFromSavedStateWithoutReReadingRepository() = runTest(dispatcher) {
-        txRepo.rows.value = listOf(existing())
+        txRepo.rows.value = listOf(existing().copy(occurrenceId = null)) // unlinked, so the type can change
         collect(); vm = newVm("t1"); advanceUntilIdle()
         assertEquals(1, txRepo.gets)
         vm.setType(INCOME); vm.setCategory("salary"); vm.setAmount("123.45")
@@ -325,5 +325,25 @@ class AddEditTransactionViewModelTest {
         ))
         collect(); vm = newVm("t1", handle); advanceUntilIdle()
         assertEquals(EXPENSE, ui.form.type)
+    }
+
+    @Test fun linkedTransactionLocksTypeToggle() = runTest(dispatcher) {
+        txRepo.rows.value = listOf(existing())          // occurrenceId = "occ"
+        collect(); vm = newVm("t1"); advanceUntilIdle()
+        assertTrue(ui.typeLocked)
+        vm.setType(INCOME); advanceUntilIdle()
+        assertEquals(EXPENSE, ui.form.type)
+        assertEquals("milk", ui.form.categoryId)
+        // Survives process death.
+        val restored = newVm("t1", SavedStateHandle(savedHandle.keys().associateWith { savedHandle.get<Any?>(it) }))
+        assertTrue(restored.uiState.value.typeLocked)
+    }
+
+    @Test fun unlinkedTransactionTypeStaysEditable() = runTest(dispatcher) {
+        txRepo.rows.value = listOf(existing().copy(occurrenceId = null))
+        collect(); vm = newVm("t1"); advanceUntilIdle()
+        assertFalse(ui.typeLocked)
+        vm.setType(INCOME); advanceUntilIdle()
+        assertEquals(INCOME, ui.form.type)
     }
 }

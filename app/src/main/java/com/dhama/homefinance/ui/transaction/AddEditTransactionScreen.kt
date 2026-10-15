@@ -98,6 +98,7 @@ fun AddEditTransactionScreen(
                 types.forEachIndexed { index, (type, label) ->
                     SegmentedButton(
                         selected = form.type == type,
+                        enabled = !state.typeLocked,
                         onClick = { viewModel.setType(type) },
                         shape = SegmentedButtonDefaults.itemShape(index, types.size)
                     ) { Text(stringResource(label)) }

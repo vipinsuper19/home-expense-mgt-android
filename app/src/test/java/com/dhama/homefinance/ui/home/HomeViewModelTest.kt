@@ -15,6 +15,7 @@ import com.dhama.homefinance.data.repository.SummaryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
 import com.dhama.homefinance.util.DateTicker
+import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -81,6 +82,9 @@ class HomeViewModelTest {
     }
     private val clock = MutableClock(Instant.parse("2026-10-15T06:00:00Z"), ZoneId.of("Asia/Kolkata"))
     private val ticker = DateTicker(clock)
+    /** Records each day Home asked to generate occurrences for. */
+    private val materialized = mutableListOf<LocalDate>()
+    private val materializer = OccurrenceMaterializer { day -> materialized += day; true }
     private val oct = YearMonth.of(2026, 10)
     private val sep = YearMonth.of(2026, 9)
 
@@ -118,7 +122,7 @@ class HomeViewModelTest {
             item("2026-07-31", 1, EXPENSE) // another month, never shown for Oct/Sep
         ))
         handle = SavedStateHandle()
-        vm = HomeViewModel(handle, ObserveMonthlySummaryUseCase(summary), summary, list, ticker)
+        vm = HomeViewModel(handle, ObserveMonthlySummaryUseCase(summary), summary, list, ticker, materializer)
     }
 
     @After fun tearDown() = Dispatchers.resetMain()
@@ -171,7 +175,7 @@ class HomeViewModelTest {
 
         val restored = HomeViewModel(
             SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }),
-            ObserveMonthlySummaryUseCase(summary), summary, list, ticker
+            ObserveMonthlySummaryUseCase(summary), summary, list, ticker, materializer
         )
         backgroundScope.launch { restored.uiState.collect {} }
         runCurrent()
@@ -223,5 +227,14 @@ class HomeViewModelTest {
         clock.now = Instant.parse("2026-10-31T19:00:00Z") // 1 Nov 00:30 IST
         vm.goToCurrentMonth(); runCurrent()
         assertEquals(YearMonth.of(2026, 11), ui.month)
+    }
+
+    @Test fun homeGeneratesOccurrencesOnOpenAndAfterMidnight() = runTest(dispatcher) {
+        backgroundScope.launch { vm.uiState.collect {} }
+        runCurrent()
+        assertEquals(listOf(LocalDate.of(2026, 10, 15)), materialized)
+        clock.now = Instant.parse("2026-10-15T18:31:00Z")
+        advanceTimeBy(DateTicker.CHECK_INTERVAL_MS + 1); runCurrent()
+        assertEquals(LocalDate.of(2026, 10, 16), materialized.last())
     }
 }

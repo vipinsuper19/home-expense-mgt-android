@@ -99,4 +99,5 @@
     <string name="end_date_optional">End date (optional)</string>
     <string name="rule_locked_hint">Type, category and repeat rule are fixed once created. To change them, stop this schedule and add a new one.</string>
     <string name="clear">Clear</string>
+    <string name="materialize_failed">Couldn\'t update upcoming items. Try reopening this screen.</string>
 </resources>

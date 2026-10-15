@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.dhama.homefinance.data.model.RecurringSchedule
 import com.dhama.homefinance.data.model.ScheduleStatus
 import com.dhama.homefinance.data.repository.RecurringRepository
+import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
 import com.dhama.homefinance.domain.recurrence.RecurrenceEngine
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.dhama.homefinance.util.DateTicker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
@@ -26,30 +28,29 @@ data class ScheduleRow(
 
 data class RecurringListUiState(
     val loading: Boolean = true,
-    val rows: List<ScheduleRow> = emptyList()
+    val rows: List<ScheduleRow> = emptyList(),
+    /** Generating occurrences failed; the list still works, the screen shows a message. */
+    val materializeFailed: Boolean = false
 )
-
-/** Materializing window used whenever recurring screens are open (reminders worker comes in m12). */
-internal fun materializeWindow(today: LocalDate): Pair<LocalDate, LocalDate> =
-    today.withDayOfMonth(1) to today.plusMonths(3)
 
 @HiltViewModel
 class RecurringListViewModel @Inject constructor(
     private val repository: RecurringRepository,
+    private val materializer: OccurrenceMaterializer,
     ticker: DateTicker
 ) : ViewModel() {
 
-    private val today = ticker.today.onEach { day ->
-        val (from, to) = materializeWindow(day)
-        repository.materialize(from, to)
-    }
+    private val failed = MutableStateFlow(false)
+
+    private val today = ticker.today.onEach { day -> failed.value = !materializer.materializeAround(day) }
 
     val uiState: StateFlow<RecurringListUiState> = combine(
         repository.observeSchedules(),
         repository.observeAllPauses(),
         repository.observeAllAmountChanges(),
-        today
-    ) { schedules, pauses, changes, day ->
+        today,
+        failed
+    ) { schedules, pauses, changes, day, fail ->
         val rows = schedules.map { s ->
             val mine = changes.filter { it.scheduleId == s.id }
             ScheduleRow(
@@ -58,6 +59,6 @@ class RecurringListViewModel @Inject constructor(
                 nextDueDate = if (s.status == ScheduleStatus.ACTIVE) RecurrenceEngine.nextDueDate(s, pauses, day) else null
             )
         }.sortedWith(compareBy<ScheduleRow> { it.schedule.status }.thenBy { it.nextDueDate ?: LocalDate.MAX }.thenBy { it.schedule.name })
-        RecurringListUiState(loading = false, rows = rows)
+        RecurringListUiState(loading = false, rows = rows, materializeFailed = fail)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecurringListUiState())
 }

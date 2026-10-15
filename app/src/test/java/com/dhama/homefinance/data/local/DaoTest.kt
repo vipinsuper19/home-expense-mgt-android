@@ -104,6 +104,13 @@ class DaoTest {
                 frequency = com.dhama.homefinance.data.model.Frequency.DAILY, startDate = LocalDate.of(2024, 1, 1)
             )
         )
+        // occurrenceId has a foreign key too.
+        db.occurrenceDao().insertIgnoringExisting(
+            com.dhama.homefinance.data.model.ScheduledOccurrence(
+                id = "o", scheduleId = "s", type = INCOME, categoryId = DefaultCategories.SHOP_RENT_ID,
+                dueDate = LocalDate.of(2024, 2, 29), expectedAmountPaise = 1
+            )
+        )
         val t = Transaction(
             type = INCOME, categoryId = DefaultCategories.SHOP_RENT_ID, scheduleId = "s", occurrenceId = "o",
             amountPaise = 1_234_567_89L, quantityMilli = 1500, unitRatePaise = 6000,

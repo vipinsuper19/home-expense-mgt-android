@@ -10,6 +10,8 @@ import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.MonthlySummary
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
 import com.dhama.homefinance.util.DateTicker
+import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+import kotlinx.coroutines.flow.onEach
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -51,7 +53,8 @@ class HomeViewModel @Inject constructor(
     private val observeMonthlySummary: ObserveMonthlySummaryUseCase,
     private val summaryRepository: SummaryRepository,
     private val listRepository: TransactionListRepository,
-    private val dateTicker: DateTicker
+    private val dateTicker: DateTicker,
+    private val materializer: OccurrenceMaterializer
 ) : ViewModel() {
 
     private fun initialMonth(): String = YearMonth.from(dateTicker.now()).toString()
@@ -66,7 +69,10 @@ class HomeViewModel @Inject constructor(
     }
 
     /** Today's totals follow the ticker, so they roll over at midnight. */
-    private val todayData = dateTicker.today.flatMapLatest { day ->
+    private val todayData = dateTicker.today.onEach { day ->
+        // Fill expected totals: generate occurrences around today (idempotent, failure-safe).
+        materializer.materializeAround(day)
+    }.flatMapLatest { day ->
         summaryRepository.actualTotals(day, day).map { day to it }
     }
 
