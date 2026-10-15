@@ -6,6 +6,9 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.dhama.homefinance.data.repository.DefaultCategories
 import com.dhama.homefinance.data.model.Category
+import com.dhama.homefinance.data.model.RecurringSchedule
+import com.dhama.homefinance.data.model.ScheduleAmountChange
+import com.dhama.homefinance.data.model.SchedulePause
 import com.dhama.homefinance.data.model.ScheduledOccurrence
 import com.dhama.homefinance.data.model.Transaction
 
@@ -15,7 +18,14 @@ import com.dhama.homefinance.data.model.Transaction
  * The exported schema lives in app/schemas/.
  */
 @Database(
-    entities = [Category::class, Transaction::class, ScheduledOccurrence::class],
+    entities = [
+        Category::class,
+        Transaction::class,
+        RecurringSchedule::class,
+        SchedulePause::class,
+        ScheduleAmountChange::class,
+        ScheduledOccurrence::class
+    ],
     version = 1,
     exportSchema = true
 )
@@ -26,6 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun occurrenceDao(): OccurrenceDao
     abstract fun summaryDao(): SummaryDao
     abstract fun transactionListDao(): TransactionListDao
+    abstract fun recurringDao(): RecurringDao
 }
 
 /**

@@ -140,6 +140,15 @@ Schedule fields include start date, frequency, interval, optional end
 date, due day/date rule, reminder time, and expected amount. Monthly
 schedules need a defined rule for months without the configured day.
 
+An amount change takes effect from a chosen date and only affects
+occurrences due on or after it that are still pending and unpaid; past,
+overdue, paid, partial and skipped occurrences keep their amount. A
+second change with the same effective date replaces the earlier one.
+
+Skipping a partially received/paid occurrence waives its remaining
+balance, so it no longer counts toward expected totals; receipts already
+linked to it stay in actual totals.
+
 ### 5.5 Daily Milk Tracker
 
 -   One entry per date for a given milk schedule.

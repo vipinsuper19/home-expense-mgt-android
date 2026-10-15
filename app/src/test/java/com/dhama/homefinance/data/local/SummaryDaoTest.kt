@@ -5,7 +5,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.ExpectedTotals
+import com.dhama.homefinance.data.model.Frequency
 import com.dhama.homefinance.data.model.OccurrenceStatus
+import com.dhama.homefinance.data.model.RecurringSchedule
 import com.dhama.homefinance.data.model.ScheduledOccurrence
 import com.dhama.homefinance.data.model.Transaction
 import com.dhama.homefinance.data.model.TransactionType
@@ -58,10 +60,22 @@ class SummaryDaoTest {
         date: String, amount: Long, type: TransactionType = EXPENSE,
         status: OccurrenceStatus = OccurrenceStatus.PENDING, category: String = bills,
         scheduleId: String = "s-${date}-${type}-${amount}"
-    ) = ScheduledOccurrence(
+    ) = ensureSchedule(scheduleId, type, category).let { ScheduledOccurrence(
         scheduleId = scheduleId, type = type, categoryId = category,
         dueDate = LocalDate.parse(date), expectedAmountPaise = amount, status = status
-    ).also { db.occurrenceDao().insertIgnoringExisting(it) }
+    ).also { db.occurrenceDao().insertIgnoringExisting(it) } }
+
+    /** Occurrences now need a parent schedule (FK); create a minimal one on demand. */
+    private suspend fun ensureSchedule(id: String, type: TransactionType, category: String) {
+        if (db.recurringDao().getSchedule(id) == null) {
+            db.recurringDao().insertSchedule(
+                RecurringSchedule(
+                    id = id, name = id, type = type, categoryId = category, amountPaise = 1,
+                    frequency = Frequency.DAILY, startDate = LocalDate.of(2000, 1, 1)
+                )
+            )
+        }
+    }
 
     private suspend fun actual(ym: String) =
         YearMonth.parse(ym).let { summary.observeActualTotals(it.atDay(1), it.atEndOfMonth()).first() }
