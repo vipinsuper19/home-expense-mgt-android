@@ -103,14 +103,12 @@ class TransactionListDaoTest {
         val filtered = repo.value.dailyTotals(oct, TransactionFilter(search = "extra")).first()
         assertEquals(1, filtered.size); assertEquals(7L, filtered[0].expensePaise)
 
-        val totals = repo.value.totals(oct, TransactionFilter(type = EXPENSE)).first()
-        assertEquals(0L, totals.incomePaise); assertEquals(37L, totals.expensePaise); assertEquals(2, totals.transactionCount)
     }
 
     @Test fun emptyMonth() = runTest {
         assertTrue(ids().isEmpty())
         assertTrue(repo.value.dailyTotals(oct, TransactionFilter()).first().isEmpty())
-        assertEquals(0, repo.value.totals(oct, TransactionFilter()).first().transactionCount)
+        assertTrue(repo.value.recent(oct, 5).first().isEmpty())
     }
 
     @Test fun filterCategoriesAreActivePlusUsedInMonth() = runTest {
@@ -136,5 +134,13 @@ class TransactionListDaoTest {
         assertEquals("%100\\%%", TransactionFilter.likePattern("100%"))
         assertEquals("%a\\_b%", TransactionFilter.likePattern("a_b"))
         assertEquals("%a\\\\b%", TransactionFilter.likePattern("a\\b"))
+    }
+
+    @Test fun recentIsLimitedInSqlNewestFirstWithinMonth() = runTest {
+        (1..8).forEach { d -> tx("2026-10-%02d".format(d), d.toLong(), createdAt = d.toLong()) }
+        tx("2026-11-01", 999)
+        val recent = repo.value.recent(oct, 5).first()
+        assertEquals(listOf(8L, 7L, 6L, 5L, 4L), recent.map { it.amountPaise })
+        assertEquals("Milk", recent.first().categoryName)
     }
 }

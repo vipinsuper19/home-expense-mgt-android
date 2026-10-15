@@ -14,6 +14,7 @@ import com.dhama.homefinance.data.model.TransactionType.INCOME
 import com.dhama.homefinance.data.repository.SummaryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
+import com.dhama.homefinance.util.DateTicker
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -25,7 +26,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -62,14 +65,22 @@ private class FakeList(private val rows: List<TransactionListItem>) : Transactio
     override fun items(month: YearMonth, filter: TransactionFilter) =
         flowOf(rows.filter { YearMonth.from(it.date) == month })
     override fun dailyTotals(month: YearMonth, filter: TransactionFilter) = flowOf(emptyList<DailyTotal>())
-    override fun totals(month: YearMonth, filter: TransactionFilter) = flowOf(ActualTotals(0, 0, 0))
+    override fun recent(month: YearMonth, limit: Int) =
+        flowOf(rows.filter { YearMonth.from(it.date) == month }.take(limit))
     override fun filterCategories(month: YearMonth, type: TransactionType?) = flowOf(emptyList<Category>())
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
     private val dispatcher = StandardTestDispatcher()
-    private val clock = Clock.fixed(Instant.parse("2026-10-15T06:00:00Z"), ZoneId.of("Asia/Kolkata"))
+    /** Settable clock so tests can cross midnight. */
+    private class MutableClock(var now: Instant, private val zone: ZoneId) : Clock() {
+        override fun getZone() = zone
+        override fun withZone(zone: ZoneId) = MutableClock(now, zone)
+        override fun instant() = now
+    }
+    private val clock = MutableClock(Instant.parse("2026-10-15T06:00:00Z"), ZoneId.of("Asia/Kolkata"))
+    private val ticker = DateTicker(clock)
     private val oct = YearMonth.of(2026, 10)
     private val sep = YearMonth.of(2026, 9)
 
@@ -93,7 +104,10 @@ class HomeViewModelTest {
                 oct to Triple(octActual, octCategories, octExpected),
                 sep to Triple(ActualTotals(0, 0, 0), emptyList(), ExpectedTotals(0, 0, 0))
             ),
-            today = mapOf(LocalDate.of(2026, 10, 15) to todayTotals)
+            today = mapOf(
+                LocalDate.of(2026, 10, 15) to todayTotals,
+                LocalDate.of(2026, 10, 16) to ActualTotals(1_000, 0, 1)
+            )
         )
         list = FakeList(listOf(
             item("2026-10-15", 6_050, EXPENSE),
@@ -104,7 +118,7 @@ class HomeViewModelTest {
             item("2026-07-31", 1, EXPENSE) // another month, never shown for Oct/Sep
         ))
         handle = SavedStateHandle()
-        vm = HomeViewModel(handle, ObserveMonthlySummaryUseCase(summary), summary, list, clock)
+        vm = HomeViewModel(handle, ObserveMonthlySummaryUseCase(summary), summary, list, ticker)
     }
 
     @After fun tearDown() = Dispatchers.resetMain()
@@ -113,7 +127,7 @@ class HomeViewModelTest {
 
     @Test fun defaultsToCurrentMonthWithActualExpectedAndTodaySeparated() = runTest(dispatcher) {
         backgroundScope.launch { vm.uiState.collect {} }
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(oct, ui.month)
         assertTrue(ui.isCurrentMonth)
         assertEquals(LocalDate.of(2026, 10, 15), ui.today)
@@ -136,7 +150,7 @@ class HomeViewModelTest {
 
     @Test fun emptyMonthHasNoActualOrExpected() = runTest(dispatcher) {
         backgroundScope.launch { vm.uiState.collect {} }
-        vm.previousMonth(); advanceUntilIdle()
+        vm.previousMonth(); runCurrent()
         assertEquals(sep, ui.month)
         assertFalse(ui.isCurrentMonth)
         assertTrue(ui.isEmpty)
@@ -150,28 +164,64 @@ class HomeViewModelTest {
 
     @Test fun monthNavigationAndRestore() = runTest(dispatcher) {
         backgroundScope.launch { vm.uiState.collect {} }
-        vm.previousMonth(); vm.previousMonth(); advanceUntilIdle()
+        vm.previousMonth(); vm.previousMonth(); runCurrent()
         assertEquals(YearMonth.of(2026, 8), ui.month)
-        vm.goToCurrentMonth(); advanceUntilIdle()
+        vm.goToCurrentMonth(); runCurrent()
         assertEquals(oct, ui.month)
 
         val restored = HomeViewModel(
             SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }),
-            ObserveMonthlySummaryUseCase(summary), summary, list, clock
+            ObserveMonthlySummaryUseCase(summary), summary, list, ticker
         )
         backgroundScope.launch { restored.uiState.collect {} }
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(oct, restored.uiState.value.month)
         assertEquals(5_000_000L, restored.uiState.value.summary!!.actualIncomePaise)
     }
 
     @Test fun projectedIsNotAddedIntoActualNet() = runTest(dispatcher) {
         backgroundScope.launch { vm.uiState.collect {} }
-        advanceUntilIdle()
+        runCurrent()
         val s = ui.summary!!
         // Actual net ignores expected entirely.
         assertEquals(s.actualIncomePaise - s.actualExpensePaise, s.netPaise)
         assertEquals(s.netPaise + s.expectedIncomePaise - s.expectedExpensePaise, s.projectedNetPaise)
         assertTrue(s.projectedNetPaise != s.netPaise)
+    }
+
+    @Test fun todayCardRollsOverAtMidnightViaTicker() = runTest(dispatcher) {
+        backgroundScope.launch { vm.uiState.collect {} }
+        runCurrent()
+        assertEquals(LocalDate.of(2026, 10, 15), ui.today)
+        assertEquals(todayTotals, ui.todayTotals)
+
+        // 23:59 IST -> 00:00:30 IST next day. Nothing changes until the next minute check.
+        clock.now = Instant.parse("2026-10-15T18:30:30Z")
+        runCurrent()
+        assertEquals(LocalDate.of(2026, 10, 15), ui.today)
+        advanceTimeBy(DateTicker.CHECK_INTERVAL_MS + 1)
+        runCurrent()
+        assertEquals(LocalDate.of(2026, 10, 16), ui.today)
+        assertEquals(ActualTotals(1_000, 0, 1), ui.todayTotals)
+        assertTrue(ui.isCurrentMonth)
+    }
+
+    @Test fun resumeTriggersImmediateRecheck() = runTest(dispatcher) {
+        backgroundScope.launch { vm.uiState.collect {} }
+        runCurrent()
+        clock.now = Instant.parse("2026-10-15T18:31:00Z") // 00:01 IST on the 16th
+        ticker.resumeObserver.onResume(object : androidx.lifecycle.LifecycleOwner {
+            override val lifecycle: androidx.lifecycle.Lifecycle = androidx.lifecycle.LifecycleRegistry.createUnsafe(this)
+        })
+        runCurrent()
+        assertEquals(LocalDate.of(2026, 10, 16), ui.today)
+    }
+
+    @Test fun goToCurrentMonthUsesClockAtTapTime() = runTest(dispatcher) {
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.previousMonth(); runCurrent()
+        clock.now = Instant.parse("2026-10-31T19:00:00Z") // 1 Nov 00:30 IST
+        vm.goToCurrentMonth(); runCurrent()
+        assertEquals(YearMonth.of(2026, 11), ui.month)
     }
 }

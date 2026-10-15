@@ -27,6 +27,7 @@ private class FakeCategoryDao : CategoryDao {
     override fun observeActiveByType(type: TransactionType) =
         rows.map { l -> l.filter { it.type == type && it.isActive } }
     override suspend fun getById(id: String) = rows.value.find { it.id == id }
+    override fun observeById(id: String) = rows.map { l -> l.find { it.id == id } }
     override suspend fun count() = rows.value.size
     private fun clashes(c: Category) =
         rows.value.any { it.id == c.id || (it.type == c.type && it.name == c.name) }

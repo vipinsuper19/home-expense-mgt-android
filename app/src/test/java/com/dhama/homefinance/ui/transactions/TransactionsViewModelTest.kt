@@ -11,6 +11,7 @@ import com.dhama.homefinance.data.model.TransactionType.EXPENSE
 import com.dhama.homefinance.data.model.TransactionType.INCOME
 import com.dhama.homefinance.data.repository.CategoryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
+import com.dhama.homefinance.util.DateTicker
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -58,11 +59,7 @@ private class FakeListRepository(private val rows: List<TransactionListItem>) : 
             DailyTotal(d, l.filter { it.type == INCOME }.sumOf { it.amountPaise }, l.filter { it.type == EXPENSE }.sumOf { it.amountPaise })
         }.sortedByDescending { it.date }
     )
-    override fun totals(month: YearMonth, filter: TransactionFilter) = flowOf(
-        match(month, filter).let { l ->
-            ActualTotals(l.filter { it.type == INCOME }.sumOf { it.amountPaise }, l.filter { it.type == EXPENSE }.sumOf { it.amountPaise }, l.size)
-        }
-    )
+    override fun recent(month: YearMonth, limit: Int) = flowOf(rows.take(limit))
     override fun filterCategories(month: YearMonth, type: TransactionType?) = flowOf(
         listOf(Category("milk", "Milk", EXPENSE, "x"), Category("salary", "Salary", INCOME, "x"))
             .filter { type == null || it.type == type }
@@ -94,12 +91,13 @@ class TransactionsViewModelTest {
             override fun observeAll() = flowOf(all)
             override fun observeActive(type: TransactionType) = flowOf(all.filter { it.type == type && it.isActive })
             override suspend fun get(id: String) = all.find { it.id == id }
+            override fun observe(id: String) = flowOf(all.find { it.id == id })
             override suspend fun add(category: Category) = Unit
             override suspend fun update(category: Category) = Unit
             override suspend fun setActive(id: String, active: Boolean) = Unit
             override suspend fun seedDefaults() = Unit
         }
-        vm = TransactionsViewModel(handle, repo, categories, clock)
+        vm = TransactionsViewModel(handle, repo, categories, DateTicker(clock))
     }
 
     private lateinit var categories: CategoryRepository
@@ -162,7 +160,7 @@ class TransactionsViewModelTest {
 
     @Test fun filterStateSurvivesRecreationFromSavedStateHandle() = runTest(dispatcher) {
         vm.previousMonth(); vm.setType(INCOME); vm.setCategory("salary"); vm.setSearch("sal")
-        val restored = TransactionsViewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }), repo, categories, clock)
+        val restored = TransactionsViewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }), repo, categories, DateTicker(clock))
         backgroundScope.launch { restored.uiState.collect {} }
         advanceUntilIdle()
         val s = restored.uiState.value
@@ -192,7 +190,7 @@ class TransactionsViewModelTest {
         // still clear a mismatched category by querying the repository.
         handle[TransactionsViewModel.KEY_CATEGORY] = "milk"
         handle[TransactionsViewModel.KEY_TYPE] = null
-        val fresh = TransactionsViewModel(handle, repo, categories, clock)
+        val fresh = TransactionsViewModel(handle, repo, categories, DateTicker(clock))
         // Don't collect: categories stay empty in the initial state.
         assertTrue(fresh.uiState.value.categories.isEmpty())
         fresh.setType(INCOME)
@@ -214,7 +212,7 @@ class TransactionsViewModelTest {
         backgroundScope.launch { vm.uiState.collect {} }
         // Seed selection of pets on the original VM via handle, rebuild with empty-month repo.
         handle[TransactionsViewModel.KEY_CATEGORY] = "pets"
-        val rebuilt = TransactionsViewModel(handle, repoWithPetsSelected, cats, clock)
+        val rebuilt = TransactionsViewModel(handle, repoWithPetsSelected, cats, DateTicker(clock))
         backgroundScope.launch { rebuilt.uiState.collect {} }
         advanceUntilIdle()
         assertEquals(listOf("milk", "salary", "pets"), rebuilt.uiState.value.categories.map { it.id })

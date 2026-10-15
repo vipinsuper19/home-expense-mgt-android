@@ -4,14 +4,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhama.homefinance.data.model.ActualTotals
-import com.dhama.homefinance.data.model.TransactionFilter
 import com.dhama.homefinance.data.model.TransactionListItem
 import com.dhama.homefinance.data.repository.SummaryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.MonthlySummary
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
+import com.dhama.homefinance.util.DateTicker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
@@ -52,28 +51,30 @@ class HomeViewModel @Inject constructor(
     private val observeMonthlySummary: ObserveMonthlySummaryUseCase,
     private val summaryRepository: SummaryRepository,
     private val listRepository: TransactionListRepository,
-    private val clock: Clock
+    private val dateTicker: DateTicker
 ) : ViewModel() {
 
-    private val month = savedState.getStateFlow(KEY_MONTH, YearMonth.now(clock).toString())
-        .map(YearMonth::parse)
+    private fun initialMonth(): String = YearMonth.from(dateTicker.now()).toString()
 
-    private val today: LocalDate get() = LocalDate.now(clock)
+    private val month = savedState.getStateFlow(KEY_MONTH, initialMonth()).map(YearMonth::parse)
 
     private val monthData = month.flatMapLatest { m ->
         combine(
             observeMonthlySummary(m),
-            listRepository.items(m, TransactionFilter()).map { it.take(RECENT_LIMIT) }
+            listRepository.recent(m, RECENT_LIMIT)
         ) { summary, recent -> summary to recent }
     }
 
-    private val todayTotals = summaryRepository.actualTotals(today, today)
+    /** Today's totals follow the ticker, so they roll over at midnight. */
+    private val todayData = dateTicker.today.flatMapLatest { day ->
+        summaryRepository.actualTotals(day, day).map { day to it }
+    }
 
-    val uiState: StateFlow<HomeUiState> = combine(month, monthData, todayTotals) { m, (summary, recent), todayT ->
+    val uiState: StateFlow<HomeUiState> = combine(month, monthData, todayData) { m, (summary, recent), (day, todayT) ->
         HomeUiState(
             month = m,
-            isCurrentMonth = m == YearMonth.from(today),
-            today = today,
+            isCurrentMonth = m == YearMonth.from(day),
+            today = day,
             summary = summary,
             todayTotals = todayT,
             recent = recent
@@ -81,17 +82,17 @@ class HomeViewModel @Inject constructor(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        YearMonth.parse(savedState.get<String>(KEY_MONTH) ?: YearMonth.now(clock).toString()).let {
-            HomeUiState(month = it, isCurrentMonth = it == YearMonth.from(today), today = today)
+        dateTicker.now().let { day ->
+            val m = YearMonth.parse(savedState.get<String>(KEY_MONTH) ?: initialMonth())
+            HomeUiState(month = m, isCurrentMonth = m == YearMonth.from(day), today = day)
         }
     )
 
-    private fun current(): YearMonth =
-        YearMonth.parse(savedState.get<String>(KEY_MONTH) ?: YearMonth.now(clock).toString())
+    private fun current(): YearMonth = YearMonth.parse(savedState.get<String>(KEY_MONTH) ?: initialMonth())
 
     fun previousMonth() = setMonth(current().minusMonths(1))
     fun nextMonth() = setMonth(current().plusMonths(1))
-    fun goToCurrentMonth() = setMonth(YearMonth.now(clock))
+    fun goToCurrentMonth() = setMonth(YearMonth.from(dateTicker.now()))
     fun setMonth(value: YearMonth) { savedState[KEY_MONTH] = value.toString() }
 
     companion object {

@@ -1,7 +1,6 @@
 package com.dhama.homefinance.data.repository
 
 import com.dhama.homefinance.data.local.TransactionListDao
-import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.Category
 import com.dhama.homefinance.data.model.DailyTotal
 import com.dhama.homefinance.data.model.TransactionFilter
@@ -15,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
 interface TransactionListRepository {
     fun items(month: YearMonth, filter: TransactionFilter): Flow<List<TransactionListItem>>
     fun dailyTotals(month: YearMonth, filter: TransactionFilter): Flow<List<DailyTotal>>
-    fun totals(month: YearMonth, filter: TransactionFilter): Flow<ActualTotals>
+    fun recent(month: YearMonth, limit: Int): Flow<List<TransactionListItem>>
     fun filterCategories(month: YearMonth, type: TransactionType?): Flow<List<Category>>
 }
 
@@ -29,8 +28,8 @@ class RoomTransactionListRepository @Inject constructor(
     override fun dailyTotals(month: YearMonth, filter: TransactionFilter) =
         dao.observeDailyTotals(month.atDay(1), month.atEndOfMonth(), filter.type, filter.categoryId, filter.searchPattern)
 
-    override fun totals(month: YearMonth, filter: TransactionFilter) =
-        dao.observeTotals(month.atDay(1), month.atEndOfMonth(), filter.type, filter.categoryId, filter.searchPattern)
+    override fun recent(month: YearMonth, limit: Int) =
+        dao.observeRecent(month.atDay(1), month.atEndOfMonth(), limit)
 
     override fun filterCategories(month: YearMonth, type: TransactionType?) =
         dao.observeFilterCategories(month.atDay(1), month.atEndOfMonth(), type)

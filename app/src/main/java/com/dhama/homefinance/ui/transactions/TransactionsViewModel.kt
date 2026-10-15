@@ -11,8 +11,8 @@ import com.dhama.homefinance.data.model.TransactionListItem
 import com.dhama.homefinance.data.model.TransactionType
 import com.dhama.homefinance.data.repository.CategoryRepository
 import com.dhama.homefinance.data.repository.TransactionListRepository
+import com.dhama.homefinance.util.DateTicker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -58,12 +59,10 @@ class TransactionsViewModel @Inject constructor(
     private val savedState: SavedStateHandle,
     private val repository: TransactionListRepository,
     private val categoryRepository: CategoryRepository,
-    clock: Clock
+    private val dateTicker: DateTicker
 ) : ViewModel() {
 
-    private val currentMonth = YearMonth.now(clock)
-
-    private val month = savedState.getStateFlow(KEY_MONTH, currentMonth.toString())
+    private val month = savedState.getStateFlow(KEY_MONTH, YearMonth.from(dateTicker.now()).toString())
     private val type = savedState.getStateFlow<String?>(KEY_TYPE, null)
     private val categoryId = savedState.getStateFlow<String?>(KEY_CATEGORY, null)
     private val search = savedState.getStateFlow(KEY_SEARCH, "")
@@ -75,7 +74,7 @@ class TransactionsViewModel @Inject constructor(
         // Don't hit the DB on every keystroke; trim so trailing spaces don't refire.
         search.map { it.trim() }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MS)
     ) { m, t, c, s ->
-        Query(YearMonth.parse(m), TransactionFilter(t?.let(TransactionType::valueOf), c, s))
+        Query(YearMonth.parse(m), TransactionFilter(TransactionType.parseOrNull(t), c, s))
     }.distinctUntilChanged()
 
     private val data = query.flatMapLatest { q ->
@@ -83,10 +82,9 @@ class TransactionsViewModel @Inject constructor(
             repository.items(q.month, q.filter),
             repository.dailyTotals(q.month, q.filter),
             repository.filterCategories(q.month, q.filter.type),
-            // Look the selected category up so an archived-but-selected one stays in the chip.
-            kotlinx.coroutines.flow.flow {
-                emit(q.filter.categoryId?.let { categoryRepository.get(it) })
-            }
+            // Live lookup so an archived-but-selected category stays in the chip (and
+            // reflects renames) for as long as it's selected.
+            q.filter.categoryId?.let { categoryRepository.observe(it) } ?: flowOf(null)
         ) { items, daily, cats, selectedCat ->
             val byDate = items.groupBy { it.date }
             // Month totals are summed from the same daily rows the list headers use, so
@@ -114,7 +112,7 @@ class TransactionsViewModel @Inject constructor(
     val uiState: StateFlow<TransactionsUiState> = combine(month, type, categoryId, search, data) { m, t, c, s, d ->
         TransactionsUiState(
             month = YearMonth.parse(m),
-            type = t?.let(TransactionType::valueOf),
+            type = TransactionType.parseOrNull(t),
             categoryId = c,
             search = s,
             categories = d.categories,
@@ -127,7 +125,8 @@ class TransactionsViewModel @Inject constructor(
     fun previousMonth() = setMonth(YearMonth.parse(month.value).minusMonths(1))
     fun nextMonth() = setMonth(YearMonth.parse(month.value).plusMonths(1))
     fun setMonth(value: YearMonth) { savedState[KEY_MONTH] = value.toString() }
-    fun goToCurrentMonth() = setMonth(currentMonth)
+    /** Reads the clock at tap time, so it is right after midnight / month end. */
+    fun goToCurrentMonth() = setMonth(YearMonth.from(dateTicker.now()))
 
     fun setType(value: TransactionType?) {
         savedState[KEY_TYPE] = value?.name

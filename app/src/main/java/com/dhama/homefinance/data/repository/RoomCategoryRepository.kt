@@ -14,6 +14,7 @@ class RoomCategoryRepository @Inject constructor(
     override fun observeAll(): Flow<List<Category>> = dao.observeAll()
     override fun observeActive(type: TransactionType) = dao.observeActiveByType(type)
     override suspend fun get(id: String) = dao.getById(id)
+    override fun observe(id: String) = dao.observeById(id)
     override suspend fun add(category: Category) = dao.insert(category.normalized())
     override suspend fun update(category: Category) = dao.update(category.normalized())
     override suspend fun setActive(id: String, active: Boolean) = dao.setActive(id, active)

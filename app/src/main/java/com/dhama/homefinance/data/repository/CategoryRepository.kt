@@ -8,6 +8,8 @@ interface CategoryRepository {
     fun observeAll(): Flow<List<Category>>
     fun observeActive(type: TransactionType): Flow<List<Category>>
     suspend fun get(id: String): Category?
+    /** Live lookup; emits again when the category changes (e.g. archived or renamed). */
+    fun observe(id: String): Flow<Category?>
     suspend fun add(category: Category)
     suspend fun update(category: Category)
     /** Categories are archived, not deleted, so history keeps its labels. */
