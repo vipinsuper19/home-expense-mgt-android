@@ -12,6 +12,7 @@ import com.dhama.homefinance.ui.recurring.RecurringScreen
 import com.dhama.homefinance.ui.reports.ReportsScreen
 import com.dhama.homefinance.ui.settings.SettingsScreen
 import com.dhama.homefinance.ui.transaction.AddEditTransactionScreen
+import com.dhama.homefinance.ui.transaction.AddEditTransactionViewModel
 import com.dhama.homefinance.ui.transactions.TransactionsScreen
 
 @Composable
@@ -42,8 +43,11 @@ fun NavGraph(
                 Route.Reports -> NavEntry(key) { ReportsScreen() }
                 is Route.AddEditTransaction -> NavEntry(key) {
                     AddEditTransactionScreen(
-                        transactionId = key.transactionId,
-                        viewModel = viewModel(),
+                        viewModel = viewModel(
+                            extras = navArgsExtras(
+                                AddEditTransactionViewModel.ARG_TRANSACTION_ID to key.transactionId
+                            )
+                        ),
                         onDone = { navigationState.onBack() }
                     )
                 }

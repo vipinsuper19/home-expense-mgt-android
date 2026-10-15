@@ -40,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -54,17 +55,15 @@ import java.time.format.FormatStyle
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditTransactionScreen(
-    transactionId: String?,
     viewModel: AddEditTransactionViewModel,
     onDone: () -> Unit
 ) {
-    LaunchedEffect(transactionId) { viewModel.start(transactionId) }
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(state.done) { if (state.done) onDone() }
 
     val form = state.form
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -161,6 +160,9 @@ fun AddEditTransactionScreen(
 
             if (state.saveFailed) {
                 Text(stringResource(R.string.save_failed), color = MaterialTheme.colorScheme.error)
+            }
+            if (state.deleteFailed) {
+                Text(stringResource(R.string.delete_failed), color = MaterialTheme.colorScheme.error)
             }
 
             Button(

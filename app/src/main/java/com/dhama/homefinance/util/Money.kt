@@ -5,11 +5,22 @@ object Money {
     private val pattern = Regex("""^\d{1,13}(\.\d{0,2})?$""")
 
     /**
+     * Rupee part with commas only as thousands separators:
+     * none ("1500"), international ("1,500", "1,234,567") or Indian ("1,23,456").
+     */
+    private val groupedRupees = Regex("""^(\d+|\d{1,3}(,\d{3})+|\d{1,2}(,\d{2})+,\d{3})$""")
+
+    /**
      * Parses a user-entered amount like "1,250.5" or "₹ 99" into paise.
      * Returns null if invalid, including zero ("0", "0.00"): amounts must be positive.
+     * Misplaced commas ("1,5", "15,00") are invalid rather than silently dropped.
      */
     fun parseRupeesToPaise(input: String): Long? {
-        val cleaned = input.trim().removePrefix("₹").trim().replace(",", "")
+        val raw = input.trim().removePrefix("₹").trim()
+        val rupeePart = raw.substringBefore('.')
+        if (raw.substringAfter('.', "").contains(',')) return null
+        if (rupeePart.contains(',') && !groupedRupees.matches(rupeePart)) return null
+        val cleaned = raw.replace(",", "")
         if (!pattern.matches(cleaned)) return null
         val parts = cleaned.split('.')
         val rupees = parts[0].toLong()
@@ -33,5 +44,18 @@ object Money {
             if (withSymbol) append('₹')
             append(grouped).append('.').append(fraction)
         }
+    }
+
+    /**
+     * Unit rate implied by an amount and a quantity (thousandths): amount ÷ quantity,
+     * rounded half-up to the nearest paisa. The stored amount stays the source of truth
+     * (PRD: amount = quantity × rate; rate is derived, never the other way round).
+     */
+    fun unitRatePaise(amountPaise: Long, quantityMilli: Long): Long {
+        require(amountPaise > 0 && quantityMilli > 0)
+        return java.math.BigDecimal.valueOf(amountPaise)
+            .multiply(java.math.BigDecimal.valueOf(1000))
+            .divide(java.math.BigDecimal.valueOf(quantityMilli), 0, java.math.RoundingMode.HALF_UP)
+            .longValueExact()
     }
 }

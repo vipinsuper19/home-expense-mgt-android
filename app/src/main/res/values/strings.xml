@@ -27,4 +27,5 @@
     <string name="delete_confirm_title">Delete this transaction?</string>
     <string name="delete_confirm_body">This can\'t be undone.</string>
     <string name="save_failed">Couldn\'t save. Please try again.</string>
+    <string name="delete_failed">Couldn\'t delete. Please try again.</string>
 </resources>
