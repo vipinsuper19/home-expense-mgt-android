@@ -22,17 +22,17 @@ class RoomTransactionRepository @Inject constructor(
 
     override suspend fun add(transaction: Transaction) {
         val now = Instant.now(clock)
-        dao.insert(transaction.trimmed().copy(createdAt = now, updatedAt = now))
+        dao.insertAndRecompute(transaction.trimmed().copy(createdAt = now, updatedAt = now))
     }
 
     override suspend fun update(transaction: Transaction) {
         val existing = requireNotNull(dao.getById(transaction.id)) { "No transaction ${transaction.id}" }
-        dao.update(
+        dao.updateAndRecompute(
             transaction.trimmed().copy(createdAt = existing.createdAt, updatedAt = Instant.now(clock))
         )
     }
 
-    override suspend fun delete(id: String) = dao.deleteById(id)
+    override suspend fun delete(id: String) = dao.deleteAndRecompute(id)
 
     private fun Transaction.trimmed() = copy(description = description.trim(), notes = notes.trim())
 }

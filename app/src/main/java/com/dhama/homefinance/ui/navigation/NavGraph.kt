@@ -9,6 +9,10 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.dhama.homefinance.ui.home.HomeScreen
 import com.dhama.homefinance.ui.recurring.RecurringScreen
+import com.dhama.homefinance.ui.recurring.ScheduleDetailScreen
+import com.dhama.homefinance.ui.recurring.ScheduleDetailViewModel
+import com.dhama.homefinance.ui.recurring.ScheduleFormScreen
+import com.dhama.homefinance.ui.recurring.ScheduleFormViewModel
 import com.dhama.homefinance.ui.reports.ReportsScreen
 import com.dhama.homefinance.ui.settings.SettingsScreen
 import com.dhama.homefinance.ui.transaction.AddEditTransactionScreen
@@ -47,7 +51,26 @@ fun NavGraph(
                         onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) }
                     )
                 }
-                Route.Recurring -> NavEntry(key) { RecurringScreen() }
+                Route.Recurring -> NavEntry(key) {
+                    RecurringScreen(
+                        viewModel = viewModel(),
+                        onAddSchedule = { navigationState.push(Route.AddEditSchedule()) },
+                        onOpenSchedule = { id -> navigationState.push(Route.ScheduleDetail(id)) }
+                    )
+                }
+                is Route.ScheduleDetail -> NavEntry(key) {
+                    ScheduleDetailScreen(
+                        viewModel = viewModel(extras = navArgsExtras(ScheduleDetailViewModel.ARG_SCHEDULE_ID to key.scheduleId)),
+                        onBack = { navigationState.onBack() },
+                        onEdit = { id -> navigationState.push(Route.AddEditSchedule(id)) }
+                    )
+                }
+                is Route.AddEditSchedule -> NavEntry(key) {
+                    ScheduleFormScreen(
+                        viewModel = viewModel(extras = navArgsExtras(ScheduleFormViewModel.ARG_SCHEDULE_ID to key.scheduleId)),
+                        onDone = { navigationState.onBack() }
+                    )
+                }
                 Route.Reports -> NavEntry(key) { ReportsScreen() }
                 is Route.AddEditTransaction -> NavEntry(key) {
                     AddEditTransactionScreen(

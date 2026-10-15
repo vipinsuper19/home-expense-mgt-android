@@ -18,6 +18,10 @@ sealed interface Route : NavKey {
         val presetType: String? = null
     ) : Route
 
+    @Serializable data class ScheduleDetail(val scheduleId: String) : Route
+    /** [scheduleId] null = create. */
+    @Serializable data class AddEditSchedule(val scheduleId: String? = null) : Route
+
     companion object {
         /** Destinations shown in the bottom bar, in order. */
         val topLevel: List<Route> = listOf(Home, Transactions, Recurring, Reports)
