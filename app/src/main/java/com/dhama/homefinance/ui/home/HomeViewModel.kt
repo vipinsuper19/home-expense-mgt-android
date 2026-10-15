@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.dhama.homefinance.data.model.ActualTotals
 import com.dhama.homefinance.data.model.TransactionListItem
 import com.dhama.homefinance.data.repository.SummaryRepository
+import com.dhama.homefinance.data.model.TransactionType
+import com.dhama.homefinance.data.model.OutstandingItem
 import com.dhama.homefinance.data.repository.TransactionListRepository
 import com.dhama.homefinance.domain.MonthlySummary
 import com.dhama.homefinance.domain.ObserveMonthlySummaryUseCase
@@ -32,8 +34,11 @@ data class HomeUiState(
     val summary: MonthlySummary? = null,
     /** Always today's actual totals, whatever month is selected. */
     val todayTotals: ActualTotals = ActualTotals(0, 0, 0),
-    val recent: List<TransactionListItem> = emptyList()
+    val recent: List<TransactionListItem> = emptyList(),
+    /** Income still to receive up to the end of the selected month (incl. earlier overdue), e.g. rent. */
+    val toReceive: List<OutstandingItem> = emptyList()
 ) {
+    val toReceivePaise: Long get() = toReceive.sumOf { it.outstandingPaise }
     val isLoading: Boolean get() = summary == null
     /** Nothing actual and nothing expected in the selected month. */
     val isEmpty: Boolean
@@ -64,8 +69,9 @@ class HomeViewModel @Inject constructor(
     private val monthData = month.flatMapLatest { m ->
         combine(
             observeMonthlySummary(m),
-            listRepository.recent(m, RECENT_LIMIT)
-        ) { summary, recent -> summary to recent }
+            listRepository.recent(m, RECENT_LIMIT),
+            summaryRepository.outstanding(TransactionType.INCOME, m.atEndOfMonth())
+        ) { summary, recent, toReceive -> MonthData(summary, recent, toReceive) }
     }
 
     /** Today's totals follow the ticker, so they roll over at midnight. */
@@ -76,14 +82,15 @@ class HomeViewModel @Inject constructor(
         summaryRepository.actualTotals(day, day).map { day to it }
     }
 
-    val uiState: StateFlow<HomeUiState> = combine(month, monthData, todayData) { m, (summary, recent), (day, todayT) ->
+    val uiState: StateFlow<HomeUiState> = combine(month, monthData, todayData) { m, (summary, recent, toReceive), (day, todayT) ->
         HomeUiState(
             month = m,
             isCurrentMonth = m == YearMonth.from(day),
             today = day,
             summary = summary,
             todayTotals = todayT,
-            recent = recent
+            recent = recent,
+            toReceive = toReceive
         )
     }.stateIn(
         viewModelScope,
@@ -100,6 +107,8 @@ class HomeViewModel @Inject constructor(
     fun nextMonth() = setMonth(current().plusMonths(1))
     fun goToCurrentMonth() = setMonth(YearMonth.from(dateTicker.now()))
     fun setMonth(value: YearMonth) { savedState[KEY_MONTH] = value.toString() }
+
+    private data class MonthData(val summary: MonthlySummary, val recent: List<TransactionListItem>, val toReceive: List<OutstandingItem>)
 
     companion object {
         const val RECENT_LIMIT = 5

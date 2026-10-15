@@ -15,6 +15,7 @@ import com.dhama.homefinance.domain.recurrence.RecurrenceEngine
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -49,24 +50,46 @@ class RecurringRepository @Inject constructor(
         dao.rename(id, name.trim(), Instant.now(clock))
     }
 
+    fun observeReceipts(scheduleId: String): Flow<List<Transaction>> = dao.observeReceipts(scheduleId)
+
     /**
-     * Mark paid / mark received: records an actual [Transaction] linked to the occurrence
-     * (type and category from its snapshot) and recomputes its status. A partial amount
-     * leaves it PARTIAL; the rest can be recorded later.
+     * Mark paid / mark received (PRD 8, shop rent): in one DB transaction, records an actual
+     * [Transaction] linked to the occurrence (type and category from its snapshot) and
+     * recomputes its status: part of the amount leaves it PARTIAL with the rest outstanding;
+     * the receipt that covers the outstanding balance closes it (COMPLETED).
+     *
+     * Idempotent per [receiptId]: the dialog creates one id when it opens and reuses it, so a
+     * double submit or a retry after process death records the receipt once
+     * ([RecordResult.AlreadyRecorded]). The amount may not exceed what is outstanding.
      */
-    suspend fun recordPayment(occurrenceId: String, amountPaise: Long, date: LocalDate, notes: String = "") = db.withTransaction {
+    suspend fun recordPayment(
+        occurrenceId: String,
+        amountPaise: Long,
+        date: LocalDate,
+        notes: String = "",
+        receiptId: String = UUID.randomUUID().toString()
+    ): RecordResult = db.withTransaction {
         require(amountPaise > 0) { "amount must be positive" }
+        val txDao = db.transactionDao()
+        txDao.getById(receiptId)?.let { existing ->
+            require(existing.occurrenceId == occurrenceId) { "Receipt id reused for another occurrence" }
+            return@withTransaction RecordResult.AlreadyRecorded
+        }
         val o = requireNotNull(dao.getOccurrence(occurrenceId)) { "No occurrence $occurrenceId" }
         check(o.status.isOpen) { "Occurrence is already ${o.status}" }
+        val outstanding = o.expectedAmountPaise - dao.paidFor(occurrenceId)
+        if (amountPaise > outstanding) return@withTransaction RecordResult.ExceedsOutstanding(outstanding)
         val s = dao.getSchedule(o.scheduleId)
         val now = Instant.now(clock)
-        db.transactionDao().insertAndRecompute(
+        txDao.insertAndRecompute(
             Transaction(
+                id = receiptId,
                 type = o.type, categoryId = o.categoryId, scheduleId = o.scheduleId, occurrenceId = o.id,
                 amountPaise = amountPaise, date = date, description = s?.name.orEmpty(), notes = notes.trim(),
                 createdAt = now, updatedAt = now
             )
         )
+        RecordResult.Recorded
     }
 
     suspend fun create(schedule: RecurringSchedule) {
@@ -177,4 +200,12 @@ class RecurringRepository @Inject constructor(
     }
 
     private suspend fun touch(s: RecurringSchedule) = dao.setStatus(s.id, s.status, s.endDate, Instant.now(clock))
+}
+
+sealed interface RecordResult {
+    data object Recorded : RecordResult
+    /** Same receiptId was already saved: nothing new was written. */
+    data object AlreadyRecorded : RecordResult
+    /** Rejected: more than the [outstandingPaise] still owed on the occurrence. */
+    data class ExceedsOutstanding(val outstandingPaise: Long) : RecordResult
 }

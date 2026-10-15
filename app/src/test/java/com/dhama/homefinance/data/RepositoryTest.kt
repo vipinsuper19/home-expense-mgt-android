@@ -10,6 +10,7 @@ import com.dhama.homefinance.data.repository.RoomCategoryRepository
 import com.dhama.homefinance.data.repository.RoomTransactionRepository
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
@@ -60,13 +61,13 @@ private class FakeTransactionDao : TransactionDao {
     }
     override suspend fun deleteById(id: String) { rows.value = rows.value.filterNot { it.id == id } }
     override suspend fun recomputeOccurrenceStatus(occurrenceId: String) {}
-    override suspend fun occurrenceType(occurrenceId: String): com.dhama.homefinance.data.model.TransactionType? = null
+    override suspend fun occurrenceType(occurrenceId: String): TransactionType? = null
 }
 
 class RepositoryTest {
     private class MutableClock(var now: Instant) : Clock() {
         override fun getZone() = ZoneOffset.UTC
-        override fun withZone(zone: java.time.ZoneId?) = this
+        override fun withZone(zone: ZoneId?) = this
         override fun instant() = now
     }
 

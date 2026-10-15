@@ -1,5 +1,6 @@
 package com.dhama.homefinance.ui.recurring
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,13 +41,15 @@ import com.dhama.homefinance.data.model.ScheduleStatus
 import com.dhama.homefinance.data.model.TransactionType
 import com.dhama.homefinance.util.Money
 import java.time.LocalDate
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleDetailScreen(
     viewModel: ScheduleDetailViewModel,
     onBack: () -> Unit,
-    onEdit: (String) -> Unit
+    onEdit: (String) -> Unit,
+    onOpenTransaction: (String) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val s = state.schedule
@@ -54,7 +57,9 @@ fun ScheduleDetailScreen(
     var payFor by rememberSaveable { mutableStateOf<String?>(null) }
     var payAmount by rememberSaveable { mutableStateOf("") }
     var payDate by rememberSaveable { mutableStateOf<String?>(null) }
-    var payError by rememberSaveable { mutableStateOf(false) }
+    var payError by rememberSaveable { mutableStateOf<PaymentInput?>(null) }
+    /** One id per dialog opening: a resubmit (or retry after process death) can't duplicate it. */
+    var payReceiptId by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -116,13 +121,27 @@ fun ScheduleDetailScreen(
                             if (row.item.paidPaise > 0) {
                                 Text(stringResource(if (income) R.string.received_amount else R.string.paid_amount, Money.formatPaise(row.item.paidPaise)))
                             }
+                            if (o.status.isOpen && row.item.paidPaise > 0) {
+                                Text(
+                                    stringResource(R.string.outstanding_amount, Money.formatPaise(row.item.remainingPaise)),
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                            row.receipts.forEach { r ->
+                                Text(
+                                    "${r.date.medium()} · ${Money.formatPaise(r.amountPaise)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.clickable { onOpenTransaction(r.id) }.padding(vertical = 2.dp)
+                                )
+                            }
                             if (o.status.isOpen) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     TextButton(onClick = {
                                         payFor = o.id
                                         payAmount = viewModel.paymentPrefill(o.id)
                                         payDate = state.today.toString()
-                                        payError = false
+                                        payError = null
+                                        payReceiptId = UUID.randomUUID().toString()
                                     }) { Text(stringResource(if (income) R.string.mark_received else R.string.mark_paid)) }
                                     TextButton(enabled = !state.isBusy, onClick = { viewModel.skip(o.dueDate) }) { Text(stringResource(R.string.skip)) }
                                 }
@@ -155,11 +174,15 @@ fun ScheduleDetailScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = payAmount,
-                        onValueChange = { payAmount = it; payError = false },
+                        onValueChange = { payAmount = it; payError = null },
                         label = { Text(stringResource(R.string.amount_label)) },
                         prefix = { Text("₹") },
-                        isError = payError,
-                        supportingText = if (payError) {{ Text(stringResource(R.string.amount_error)) }} else null,
+                        isError = payError != null,
+                        supportingText = when (payError) {
+                            PaymentInput.INVALID_AMOUNT -> {{ Text(stringResource(R.string.amount_error)) }}
+                            PaymentInput.EXCEEDS_OUTSTANDING -> {{ Text(stringResource(R.string.exceeds_outstanding, viewModel.paymentPrefill(occurrenceId))) }}
+                            else -> null
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -175,7 +198,8 @@ fun ScheduleDetailScreen(
             confirmButton = {
                 TextButton(enabled = !state.isBusy, onClick = {
                     val date = payDate?.let(LocalDate::parse) ?: state.today
-                    if (viewModel.recordPayment(occurrenceId, payAmount, date)) payFor = null else payError = true
+                    val result = viewModel.recordPayment(occurrenceId, payAmount, date, payReceiptId)
+                    if (result == PaymentInput.ACCEPTED) payFor = null else payError = result
                 }) { Text(stringResource(R.string.save)) }
             },
             dismissButton = { TextButton(onClick = { payFor = null }) { Text(stringResource(R.string.cancel)) } }

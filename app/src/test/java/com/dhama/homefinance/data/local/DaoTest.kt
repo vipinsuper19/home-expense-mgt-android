@@ -5,6 +5,9 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.dhama.homefinance.data.model.Category
+import com.dhama.homefinance.data.model.Frequency
+import com.dhama.homefinance.data.model.RecurringSchedule
+import com.dhama.homefinance.data.model.ScheduledOccurrence
 import com.dhama.homefinance.data.model.Transaction
 import com.dhama.homefinance.data.model.TransactionType.EXPENSE
 import com.dhama.homefinance.data.model.TransactionType.INCOME
@@ -99,14 +102,14 @@ class DaoTest {
     @Test fun roundTripsAllFieldsAndDeletes() = runTest {
         // scheduleId now has a foreign key; give it a parent schedule.
         db.recurringDao().insertSchedule(
-            com.dhama.homefinance.data.model.RecurringSchedule(
+            RecurringSchedule(
                 id = "s", name = "s", type = INCOME, categoryId = DefaultCategories.SHOP_RENT_ID, amountPaise = 1,
-                frequency = com.dhama.homefinance.data.model.Frequency.DAILY, startDate = LocalDate.of(2024, 1, 1)
+                frequency = Frequency.DAILY, startDate = LocalDate.of(2024, 1, 1)
             )
         )
         // occurrenceId has a foreign key too.
         db.occurrenceDao().insertIgnoringExisting(
-            com.dhama.homefinance.data.model.ScheduledOccurrence(
+            ScheduledOccurrence(
                 id = "o", scheduleId = "s", type = INCOME, categoryId = DefaultCategories.SHOP_RENT_ID,
                 dueDate = LocalDate.of(2024, 2, 29), expectedAmountPaise = 1
             )

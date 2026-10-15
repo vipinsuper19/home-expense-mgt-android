@@ -6,6 +6,8 @@ import androidx.work.Configuration
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.dhama.homefinance.data.repository.CategoryRepository
+import com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+import com.dhama.homefinance.util.DateTicker
 import com.dhama.homefinance.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +31,10 @@ class HomeFinanceApplication : Application(), Configuration.Provider {
     lateinit var categoryRepository: CategoryRepository
 
     @Inject
-    lateinit var occurrenceMaterializer: com.dhama.homefinance.domain.recurrence.OccurrenceMaterializer
+    lateinit var occurrenceMaterializer: OccurrenceMaterializer
 
     @Inject
-    lateinit var dateTicker: com.dhama.homefinance.util.DateTicker
+    lateinit var dateTicker: DateTicker
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

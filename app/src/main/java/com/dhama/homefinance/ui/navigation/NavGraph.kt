@@ -41,7 +41,8 @@ fun NavGraph(
                         onAddTransaction = { type ->
                             navigationState.push(Route.AddEditTransaction(presetType = type?.name))
                         },
-                        onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) }
+                        onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) },
+                        onOpenSchedule = { id -> navigationState.push(Route.ScheduleDetail(id)) }
                     )
                 }
                 Route.Transactions -> NavEntry(key) {
@@ -62,7 +63,8 @@ fun NavGraph(
                     ScheduleDetailScreen(
                         viewModel = viewModel(extras = navArgsExtras(ScheduleDetailViewModel.ARG_SCHEDULE_ID to key.scheduleId)),
                         onBack = { navigationState.onBack() },
-                        onEdit = { id -> navigationState.push(Route.AddEditSchedule(id)) }
+                        onEdit = { id -> navigationState.push(Route.AddEditSchedule(id)) },
+                        onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) }
                     )
                 }
                 is Route.AddEditSchedule -> NavEntry(key) {

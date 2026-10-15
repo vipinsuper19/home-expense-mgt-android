@@ -57,7 +57,8 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenSettings: () -> Unit,
     onAddTransaction: (TransactionType?) -> Unit,
-    onOpenTransaction: (String) -> Unit
+    onOpenTransaction: (String) -> Unit,
+    onOpenSchedule: (String) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     Scaffold(
@@ -82,6 +83,7 @@ fun HomeScreen(
             item { ActualCard(state) }
             item { TodayCard(state) }
             if (state.hasExpected) item { ExpectedCard(state.summary!!) }
+            if (state.toReceive.isNotEmpty()) item { ToReceiveCard(state, onOpenSchedule) }
             if (state.isEmpty) {
                 item { EmptyHome(onAddTransaction) }
             } else {
@@ -169,6 +171,40 @@ private fun TodayCard(state: HomeUiState) {
         }
     }
 }
+
+/** Rent and other income still owed: expected − received, per occurrence (PRD 8). */
+@Composable
+private fun ToReceiveCard(state: HomeUiState, onOpenSchedule: (String) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(stringResource(R.string.to_receive_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+                Text(Money.formatPaise(state.toReceivePaise), style = MaterialTheme.typography.titleMedium)
+            }
+            state.toReceive.forEach { item ->
+                val overdue = item.dueDate.isBefore(state.today)
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenSchedule(item.scheduleId) }.padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.scheduleName)
+                        Text(
+                            stringResource(if (overdue) R.string.overdue_since else R.string.due_on, item.dueDate.format(dueFormatter)) +
+                                if (item.paidPaise > 0) " · " + stringResource(R.string.received_amount, Money.formatPaise(item.paidPaise)) else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(Money.formatPaise(item.outstandingPaise))
+                }
+            }
+            Text(stringResource(R.string.to_receive_footnote), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private val dueFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 
 @Composable
 private fun ExpectedCard(summary: MonthlySummary) {
