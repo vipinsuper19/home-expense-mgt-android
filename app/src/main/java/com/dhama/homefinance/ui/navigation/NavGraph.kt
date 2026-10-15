@@ -37,7 +37,11 @@ fun NavGraph(
                     )
                 }
                 Route.Transactions -> NavEntry(key) {
-                    TransactionsScreen(onAddTransaction = { navigationState.push(Route.AddEditTransaction()) })
+                    TransactionsScreen(
+                        viewModel = viewModel(),
+                        onAddTransaction = { navigationState.push(Route.AddEditTransaction()) },
+                        onOpenTransaction = { id -> navigationState.push(Route.AddEditTransaction(id)) }
+                    )
                 }
                 Route.Recurring -> NavEntry(key) { RecurringScreen() }
                 Route.Reports -> NavEntry(key) { ReportsScreen() }

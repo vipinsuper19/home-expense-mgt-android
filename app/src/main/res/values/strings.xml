@@ -28,4 +28,14 @@
     <string name="delete_confirm_body">This can\'t be undone.</string>
     <string name="save_failed">Couldn\'t save. Please try again.</string>
     <string name="delete_failed">Couldn\'t delete. Please try again.</string>
+    <string name="search_hint">Search description or note</string>
+    <string name="clear_search">Clear search</string>
+    <string name="previous_month">Previous month</string>
+    <string name="next_month">Next month</string>
+    <string name="filter_all">All</string>
+    <string name="filter_all_categories">All categories</string>
+    <string name="net">Net</string>
+    <string name="empty_month">No transactions this month. Tap + to add one.</string>
+    <string name="empty_filtered">No transactions match these filters.</string>
+    <string name="clear_filters">Clear filters</string>
 </resources>
