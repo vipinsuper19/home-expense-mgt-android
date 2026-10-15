@@ -38,12 +38,7 @@ android {
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.accompanist.permissions)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.compose.adaptive)
-    implementation(libs.androidx.compose.adaptive.layout)
-    implementation(libs.androidx.compose.adaptive.navigation3)
-    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.material3)
@@ -63,7 +58,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.hilt.work)
     "ksp"(libs.androidx.hilt.compiler)
     implementation(libs.kotlinx.coroutines.android)
